@@ -111,5 +111,23 @@ return [
     */
 
     'password_timeout' => 10800,
+    
+'providers' => [
+    'users' => [
+        'driver' => 'eloquent',
+        'model' => App\Models\Utilisateur::class, // ← Important !
+    ],
+],
 
+'guards' => [
+    'web' => [
+        'driver' => 'session',
+        'provider' => 'users',
+    ],
+
+    'admin' => [ // Pour Voyager
+        'driver' => 'session',
+        'provider' => 'users',
+    ],
+],
 ];

@@ -1,6 +1,10 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ReunionController;
+use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\clController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -20,4 +24,6 @@ Route::get('/', function () {
 
 Route::group(['prefix' => 'admin'], function () {
     Voyager::routes();
+  
 });
+Route::view('/calendrier', 'cl');
