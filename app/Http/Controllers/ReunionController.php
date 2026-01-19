@@ -20,8 +20,28 @@ class ReunionController extends Controller
 
         $reunionsQuery = Reunion::whereBetween('date_debut', [$start, $end]);
 
-        if ($request->filled('organisation_id')) {
-            $reunionsQuery->where('organisation_id', $request->organisation_id);
+        $user = auth()->user();
+        if ($user) {
+            if ($user->isAdmin()) {
+                // Admin sees all, but can filter by organisation_id if provided
+                if ($request->filled('organisation_id')) {
+                    $reunionsQuery->where('organisation_id', $request->organisation_id);
+                }
+            } elseif ($user->isChef()) {
+                // Chef only sees his organisation's reunions
+                $org = $user->managedOrganisation;
+                if ($org) {
+                    $reunionsQuery->where('organisation_id', $org->id);
+                } else {
+                    $reunionsQuery->whereRaw('1 = 0'); // No org, no reunions
+                }
+            } else {
+                // Member only sees reunions he's invited to
+                $reunionsQuery->whereHas('invitations', function($q) use ($user) {
+                    $q->where('participant_id', $user->id)
+                      ->orWhere('email', $user->email);
+                });
+            }
         }
 
         $reunions = $reunionsQuery->get()

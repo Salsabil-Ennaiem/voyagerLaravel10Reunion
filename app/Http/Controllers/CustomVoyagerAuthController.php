@@ -21,6 +21,6 @@ class CustomVoyagerAuthController extends VoyagerAuthController
             return config('voyager.user.redirect', route('voyager.dashboard'));
         }
         // Redirect non-admin users to the calendar or specific route
-        return '/calendrier';
+        return '/reunion';
     }
 }

@@ -16,7 +16,63 @@
 
     <div class=" flex items-center justify-center p-4">
         <div id="calendarContainer" class="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
-            <!-- Rendered by JS -->
+            <!-- Monthly Header -->
+            <div class="bg-gray-50 px-4 py-3 border-b">
+                <h2 class="text-xl font-bold text-center text-gray-800 mb-2" x-text="getTodayDisplay()"></h2>
+                
+                <!-- Admin Filters -->
+                <template x-if="isAdmin">
+                    <div class="flex justify-center mb-3">
+                        <select x-model="selectedOrg" @change="fetchEvents()" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg shadow-sm text-sm w-64">
+                            <option value="">Toutes les organisations</option>
+                            <template x-for="org in organisations" :key="org.id">
+                                <option :value="org.id" x-text="org.nom"></option>
+                            </template>
+                        </select>
+                    </div>
+                </template>
+
+                <div class="flex items-center justify-between gap-2 text-sm">
+                    <button @click="prevMonth()" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition">
+                        ◄ <span x-text="monthNames[currentMonth === 1 ? 12 : currentMonth - 1].substring(0,3)"></span>
+                    </button>
+                    <select x-model="currentMonth" @change="renderCalendar()" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg shadow-sm">
+                        <template x-for="(m, i) in monthNames" :key="i">
+                            <option x-show="i > 0" :value="i" x-text="m" :selected="i == currentMonth"></option>
+                        </template>
+                    </select>
+                    <select x-model="currentYear" @change="fetchEvents()" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg shadow-sm">
+                        <template x-for="y in yearRange" :key="y">
+                            <option :value="y" x-text="y" :selected="y == currentYear"></option>
+                        </template>
+                    </select>
+                    <button @click="nextMonth()" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition">
+                        <span x-text="monthNames[currentMonth === 12 ? 1 : currentMonth + 1].substring(0,3)"></span> ►
+                    </button>
+                </div>
+            </div>
+
+            <!-- Monthly Grid -->
+            <div class="grid grid-cols-7 gap-px bg-gray-200 text-center text-sm">
+                <template x-for="w in weekdays">
+                    <div class="py-2 bg-gray-300 font-medium text-gray-800" x-text="w"></div>
+                </template>
+
+                <!-- Day Cells -->
+                <template x-for="day in calendarDays" :key="day.id">
+                    <div :class="day.classes" 
+                         @click="day.isEmpty ? null : openDayModal(day.day, currentMonth, currentYear, day.ferieName)">
+                        <span x-text="day.day"></span>
+                        
+                        <!-- Event Dots -->
+                        <div x-show="day.events.length" class="flex gap-1 mt-1 flex-wrap justify-center px-1">
+                            <template x-for="e in day.events.slice(0, 3)" :key="e.id">
+                                <span class="w-1.5 h-1.5 rounded-full" :class="'bg-' + getStatusColor(e.status)"></span>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
         </div>
 
         <!-- REUNION DETAIL MODAL (List View) -->
@@ -55,13 +111,27 @@
                                     <div x-show="selectionStart && !selectionEnd && isSlotSelected(slot.fullDateTime)" 
                                          class="absolute inset-0 bg-indigo-200/50 pointer-events-none"></div>
 
-                                    <template x-for="event in getEventsStartingAt(slot.fullDateTime)" :key="event.id">
-                                        <div class="text-xs p-1 mx-1 mt-0.5 rounded border shadow-sm relative z-10"
-                                             :class="'bg-' + getStatusColor(event.status).replace('500','100').replace('600','100') + ' border-' + getStatusColor(event.status)">
-                                            <div class="font-bold text-gray-800" x-text="event.title"></div>
-                                            <div class="text-[10px] text-gray-600">
-                                                <span x-text="formatTime(event.start)"></span> - <span x-text="formatTime(event.end)"></span>
-                                            </div>
+                                    <template x-for="event in getEventsInSlot(slot.fullDateTime)" :key="event.id">
+                                        <div class="mx-1 relative z-10"
+                                             :class="[
+                                                'bg-' + getStatusColor(event.status).replace('500','100').replace('600','100'),
+                                                'border-' + getStatusColor(event.status),
+                                                event.isStart ? 'mt-0.5 rounded-t border-t border-x p-1' : 'border-x',
+                                                event.isEnd ? 'mb-0.5 rounded-b border-b' : ''
+                                             ]">
+                                            <template x-if="event.isStart">
+                                                <div>
+                                                    <div class="font-bold text-gray-800 text-[10px] leading-tight" x-text="event.title"></div>
+                                                    <div class="text-[9px] text-gray-600">
+                                                        <span x-text="formatTime(event.start)"></span> - <span x-text="formatTime(event.end)"></span>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <template x-if="!event.isStart">
+                                                <div class="h-full flex items-center justify-center">
+                                                    <div class="w-full h-1 opacity-20" :class="'bg-' + getStatusColor(event.status)"></div>
+                                                </div>
+                                            </template>
                                         </div>
                                     </template>
                                 </div>
@@ -118,15 +188,14 @@
                 modalTitle: '',
                 ferieName: '',
                 dayEvents: [],
-                selectedDateStr: '', 
-
-                organisations: [],
-                selectedOrg: '',
-                timeSlots: [],
-                selectionStart: null,
-                selectionEnd: null,
+                calendarDays: [],
+                yearRange: [],
 
                 init() {
+                    // Populate year range
+                    const y = new Date().getFullYear();
+                    for(let i = y-5; i <= y+5; i++) this.yearRange.push(i);
+
                     // Initialize
                     this.fetchOrganisations();
                     this.renderCalendar(); // Render grid immediately
@@ -215,16 +284,25 @@
                     return slots;
                 },
 
-                getEventsStartingAt(slotDateTime) {
-                    // Find events that start within this 5 minute slot
-                    // Ideally we match exactly the minute, but users might input :03
-                    // For simplicity, we match strict equality on YYYY-MM-DDTHH:mm
-                    // But our ISO strings from DB have seconds. 
-                    // So we compare substring(0, 16)
-                    const slotPrefix = slotDateTime.substring(0, 16);
+                getEventsInSlot(slotDateTime) {
+                    const slotStart = new Date(slotDateTime);
+                    const slotEnd = new Date(slotStart.getTime() + 5 * 60000);
                     
                     return this.dayEvents.filter(e => {
-                        return e.start.substring(0, 16) === slotPrefix;
+                        const eventStart = new Date(e.start);
+                        const eventEnd = e.end ? new Date(e.end) : new Date(eventStart.getTime() + 30 * 60000);
+                        
+                        // Overlap check
+                        return eventStart < slotEnd && eventEnd > slotStart;
+                    }).map(e => {
+                        const eventStart = new Date(e.start);
+                        const eventEnd = e.end ? new Date(e.end) : new Date(eventStart.getTime() + 30 * 60000);
+                        
+                        return {
+                            ...e,
+                            isStart: slotStart.getTime() <= eventStart.getTime() && eventStart.getTime() < slotEnd.getTime(),
+                            isEnd: slotStart.getTime() <= (eventEnd.getTime() - 1) && (eventEnd.getTime() - 1) < slotEnd.getTime()
+                        };
                     });
                 },
 
@@ -248,7 +326,7 @@
 
                 async fetchOrganisations() {
                     try {
-                        const res = await fetch('/organisations/list');
+                        const res = await fetch('/organisations/data');
                         this.organisations = await res.json();
                     } catch(e) { console.error('Error fetching orgs', e); }
                 },
@@ -351,83 +429,40 @@
                     const todayDay = today.getDate();
                     
                     this.allFeries = { ...this.feries, ...this.getFeriesMobiles(year) };
+                    const days = [];
 
-                    let html = `
-                        <div class="bg-gray-50 px-4 py-3 border-b">
-                                                <h2 class="text-xl font-bold text-center text-gray-800 mb-2" x-text="getTodayDisplay()"></h2>
-                        
-                            <!-- Admin Filters -->
-                            @if(Auth::check() && (Auth::user()->hasRole('admin') || Auth::user()->role_id == 1))
-                            <div class="flex justify-center mb-3">
-                                <select x-model="selectedOrg" @change="fetchEvents()" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg shadow-sm text-sm w-64">
-                                    <option value="">Toutes les organisations</option>
-                                    <template x-for="org in organisations" :key="org.id">
-                                        <option :value="org.id" x-text="org.nom"></option>
-                                    </template>
-                                </select>
-                            </div>
-                            @endif
-
-                            <div class="flex items-center justify-between gap-2 text-sm">
-                                <button @click="prevMonth()" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition">◄ <span x-text="monthNames[currentMonth === 1 ? 12 : currentMonth - 1].substring(0,3)"></span></button>
-                                <select x-model="currentMonth" @change="renderCalendar()" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg shadow-sm">
-                                    <template x-for="(m, i) in monthNames" :key="i">
-                                        <option x-show="i > 0" :value="i" x-text="m" :selected="i == currentMonth"></option>
-                                    </template>
-                                </select>
-                                <select x-model="currentYear" @change="fetchEvents()" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg shadow-sm">
-                                    ${Array.from({length: 21}, (_, i) => year - 10 + i).map(y => `<option value="${y}" ${y === year ? 'selected' : ''}>${y}</option>`).join('')}
-                                </select>
-                                <button @click="nextMonth()" class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition"><span x-text="monthNames[currentMonth === 12 ? 1 : currentMonth + 1].substring(0,3)"></span> ►</button>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-7 gap-px bg-gray-200 text-center text-sm">
-                            <template x-for="w in weekdays"><div class="py-2 bg-gray-300 font-medium text-gray-800" x-text="w"></div></template>
-                    `;
-
+                    // Padding
                     for (let i = 1; i < firstWeekday; i++) {
-                        html += '<div class="py-3 bg-gray-50"></div>';
+                        days.push({ id: 'pad-' + i, isEmpty: true, classes: 'py-3 bg-gray-50' });
                     }
 
+                    // Days
                     for (let day = 1; day <= daysInMonth; day++) {
                         const key = `${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
                         const ferieName = this.allFeries[key] || '';
                         const isFerie = !!ferieName;
                         const isToday = isTodayMonth && day === todayDay;
                         const isWeekend = (new Date(year, month-1, day).getDay() % 7) >= 5;
-
                         const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-                        const dayEvents = this.events.filter(e => e.start.startsWith(dateStr));
                         
                         let classes = 'py-3 cursor-pointer transition day-cell border-t border-r border-gray-200 relative min-h-[4rem] flex flex-col items-center justify-start pt-1';
                         if (isToday) classes += ' bg-indigo-50 font-bold';
                         else classes += ' bg-white';
-                        
                         if (isWeekend) classes += ' text-red-700';
                         if (isFerie) classes += ' ferie';
 
-                        let indicator = '';
-                        if (dayEvents.length) {
-                             indicator = `<div class="flex gap-1 mt-1 flex-wrap justify-center px-1">`;
-                            // Show up to 3 dots with color
-                            dayEvents.slice(0,3).forEach(e => {
-                                const color = this.getStatusColor(e.status);
-                                indicator += `<span class="w-1.5 h-1.5 rounded-full bg-${color}"></span>`;
-                            });
-                            indicator += `</div>`;
-                        }
-
-                        html += `
-                            <div class="${classes}" 
-                                 @click="openDayModal(${day}, ${month}, ${year}, '${ferieName.replace(/'/g, "\\'")}')">
-                                <span>${day}</span>
-                                ${indicator}
-                            </div>
-                        `;
+                        days.push({
+                            id: dateStr,
+                            day: day,
+                            dateStr: dateStr,
+                            isFerie: isFerie,
+                            ferieName: ferieName,
+                            classes: classes,
+                            events: this.events.filter(e => e.start.startsWith(dateStr))
+                        });
                     }
-                    html += '</div>';
                     
-                    document.getElementById('calendarContainer').innerHTML = html;
+                    this.calendarDays = days;
                 }
             }
         }

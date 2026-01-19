@@ -21,11 +21,11 @@
                    {{ request()->is('reunion*') ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-100' : 'text-gray-700 bg-white/30 backdrop-blur-md hover:bg-white/50 border-white/60' }}">
                     Réunion
                 </a>
-                @if(Auth::check() && (Auth::user()->hasRole('admin') || Auth::user()->role_id == 1))
+                @if(Auth::check() && (Auth::user()->isAdmin() || Auth::user()->isChef()))
                     <a href="{{ route('organisations.list') }}" 
                        class="px-5 py-2 text-sm font-bold transition-all duration-300 rounded-full shadow-sm hover:shadow-md hover:-translate-y-0.5 border
                        {{ request()->is('organisations*') ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-100' : 'text-gray-700 bg-white/30 backdrop-blur-md hover:bg-white/50 border-white/60' }}">
-                        Organisations
+                        Organisation{{ Auth::user()->isAdmin() ? 's' : '' }}
                     </a>
                 @endif
             </div>
@@ -151,12 +151,12 @@
                 Réunion
             </a>
             
-            @if(Auth::check() && (Auth::user()->hasRole('admin') || Auth::user()->role_id == 1))
+            @if(Auth::check() && (Auth::user()->isAdmin() || Auth::user()->isChef()))
             <a href="{{ route('organisations.list') }}" 
                class="flex items-center gap-3 px-4 py-3 font-bold rounded-xl transition shadow-sm border
                {{ request()->is('organisations*') ? 'text-indigo-700 bg-indigo-100/80 border-indigo-200' : 'text-gray-800 bg-indigo-50/50 hover:bg-indigo-100/50 border-indigo-100/20' }}">
                 <svg class="w-5 h-5 {{ request()->is('organisations*') ? 'text-indigo-700' : 'text-indigo-600' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
-                Organisations
+                Organisation{{ Auth::user()->isAdmin() ? 's' : '' }}
             </a>
             @endif
         </nav>

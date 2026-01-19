@@ -51,6 +51,26 @@ class User extends \TCG\Voyager\Models\User
         'remember_token',
     ];
 
+    public function managedOrganisation()
+    {
+        return $this->hasOne(Organisation::class, 'chef_organisation_id');
+    }
+
+    public function isChef()
+    {
+        return ($this->getAttributes()['role'] ?? '') === 'chef_organisation';
+    }
+
+    public function isAdmin()
+    {
+        return $this->hasRole('admin') || $this->role_id == 1;
+    }
+
+    public function invitations()
+    {
+        return $this->hasMany(Invitation::class, 'participant_id');
+    }
+
     /**
      * The attributes that should be cast.
      *

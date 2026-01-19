@@ -55,6 +55,11 @@ class Reunion extends Model
         return $this->belongsTo(Organisation::class);
     }
 
+    public function invitations()
+    {
+        return $this->hasMany(Invitation::class);
+    }
+
     // Optional: scopes
     public function scopePlanifiees($query)
     {

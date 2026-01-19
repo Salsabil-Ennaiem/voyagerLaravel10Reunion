@@ -22,12 +22,22 @@ Route::view('/Untitled', 'Untitled');
 
 // Custom Routes
 use App\Http\Controllers\ReunionController;
-Route::get('/reunions/list', [ReunionController::class, 'list'])->name('reunions.list');
-Route::get('/organisations/list', [ReunionController::class, 'organisations'])->name('organisations.list');
-Route::get('/reunion-options', [ReunionController::class, 'getOptions'])->name('reunions.options');
-Route::post('/reunions', [ReunionController::class, 'store'])->name('reunions.store');
-Route::get('/notifications', [ReunionController::class, 'getNotifications'])->name('notifications.index');
-Route::post('/notifications/{id}/read', [ReunionController::class, 'markNotificationAsRead'])->name('notifications.read');
+use App\Http\Controllers\OrganisationController;
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/reunions/list', [ReunionController::class, 'list'])->name('reunions.list');
+    Route::get('/organisations/data', [ReunionController::class, 'organisations'])->name('organisations.data'); // Renamed from list to avoid conflict
+    Route::get('/reunion-options', [ReunionController::class, 'getOptions'])->name('reunions.options');
+    Route::post('/reunions', [ReunionController::class, 'store'])->name('reunions.store');
+    Route::get('/notifications', [ReunionController::class, 'getNotifications'])->name('notifications.index');
+    Route::post('/notifications/{id}/read', [ReunionController::class, 'markNotificationAsRead'])->name('notifications.read');
+
+    // Organisation Management
+    Route::get('/organisations', [OrganisationController::class, 'index'])->name('organisations.list');
+    Route::get('/organisations/my', [OrganisationController::class, 'myOrganisation'])->name('organisations.my');
+    Route::get('/organisations/{organisation}', [OrganisationController::class, 'show'])->name('organisations.show');
+    Route::post('/organisations/{organisation}', [OrganisationController::class, 'update'])->name('organisations.update');
+});
 
 Route::post('/logout', function () {
     Auth::logout();
