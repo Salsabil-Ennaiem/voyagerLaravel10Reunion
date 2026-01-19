@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('membres', function (Blueprint $table) {
-            $table->id();                           // id_Mem
+            $table->id();                           
             $table->string('fonction', 100)->nullable();
             $table->text('description')->nullable();
 
@@ -18,7 +18,7 @@ return new class extends Migration
                   ->onDelete('cascade');
 
             $table->foreignId('compte_id')          // compte = utilisateur
-                  ->constrained('utilisateurs')
+                  ->constrained('users')
                   ->onDelete('cascade');
 
             $table->timestamps();

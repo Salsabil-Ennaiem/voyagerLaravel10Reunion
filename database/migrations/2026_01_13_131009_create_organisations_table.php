@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('adresse', 255)->nullable();
             $table->foreignId('chef_organisation_id')
                   ->nullable()
-                  ->constrained('utilisateurs')
+                  ->constrained('users')
                   ->onDelete('set null');
             $table->string('image')->nullable();
             $table->timestamps();

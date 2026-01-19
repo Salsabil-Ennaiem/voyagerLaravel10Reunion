@@ -4,98 +4,90 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use TCG\Voyager\Traits\Translatable; // If you plan to use translations in Voyager
-use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Reunion extends Model
 {
     use HasFactory;
-    // use Translatable; // Uncomment if you enable translations for fields like objet, description, etc.
 
-    /**
-     * The table associated with the model.
-     *
-     * @var string
-     */
-    protected $table = 'reunion';
+    protected $table = 'reunions';
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<string>
-     */
+
     protected $fillable = [
         'objet',
-        'Description',
-        'ordre_jour',
+        'description',
+        'ordre_du_jour',
         'date_debut',
         'date_fin',
         'lieu',
         'type',
         'statut',
-        'Presendent_id', // Foreign key to president (usually a User or custom model)
-        'user_id',       // Foreign key to the creator/user
+        'organisation_id',
     ];
 
     /**
-     * The attributes that should be cast to native types.
+     * The attributes that should be cast.
      *
-     * @var array
+     * @var array<string, string>
      */
     protected $casts = [
         'date_debut' => 'datetime',
         'date_fin'   => 'datetime',
+        'type'       => 'string',
+        'statut'     => 'string',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
 
     /**
-     * Optional: If you want translated attributes with Voyager
+     * Default attribute values
      *
      * @var array
      */
-    // protected $translatable = ['objet', 'Description', 'ordre_jour', 'lieu'];
+    protected $attributes = [
+        'type'   => 'presentiel',
+        'statut' => 'brouillon',
+    ];
 
-    /**
-     * Relationship: Réunion belongs to a User (creator)
-     */
-    public function user()
+    // Relationships
+    public function organisation(): BelongsTo
     {
-        return $this->belongsTo(utilisateur::class, 'cin_ou_passeport');
+        return $this->belongsTo(Organisation::class);
     }
 
-    /**
-     * Relationship: Réunion belongs to a President (usually a User)
-     */
-    public function president()
+    // Optional: scopes
+    public function scopePlanifiees($query)
     {
-        return $this->belongsTo(utilisateur::class, 'Presendent_id');
+        return $query->where('statut', 'planifiee');
     }
 
-    /**
-     * Accessor: Get formatted start date
-     */
-    public function getDateDebutFormattedAttribute()
+    public function scopeEnCours($query)
     {
-        return $this->date_debut ? Carbon::parse($this->date_debut)->format('d/m/Y H:i') : null;
+        return $query->where('statut', 'en_cours');
     }
 
-    /**
-     * Accessor: Get formatted end date
-     */
-    public function getDateFinFormattedAttribute()
+    public function scopeTerminees($query)
     {
-        return $this->date_fin ? Carbon::parse($this->date_fin)->format('d/m/Y H:i') : null;
+        return $query->where('statut', 'terminee');
     }
 
-    /**
-     * Scope: Get reunions that overlap with a given date range
-     */
-    public function scopeOverlapping($query, Carbon $start, Carbon $end)
+    public function scopeBrouillons($query)
     {
-        return $query->where(function ($q) use ($start, $end) {
-            $q->where('date_debut', '<=', $end)
-              ->where('date_fin', '>=', $start);
-        });
+        return $query->where('statut', 'brouillon');
+    }
+
+    // Optional: helper methods / accessors
+    public function getIsFutureAttribute(): bool
+    {
+        return $this->date_debut->isFuture();
+    }
+
+    public function getDurationInMinutesAttribute(): ?int
+    {
+        if (!$this->date_fin) {
+            return null;
+        }
+
+        return $this->date_debut->diffInMinutes($this->date_fin);
     }
 }

@@ -115,7 +115,7 @@ return [
 'providers' => [
     'users' => [
         'driver' => 'eloquent',
-        'model' => App\Models\Utilisateur::class, // ← Important !
+        'model' => App\Models\User::class, // ← Important !
     ],
 ],
 
