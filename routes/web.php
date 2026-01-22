@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\EventController;
+use App\Http\Controllers\ReunionController;
+use App\Http\Controllers\OrganisationController;
+use Illuminate\Support\Facades\Auth;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,39 +16,46 @@ use App\Http\Controllers\EventController;
 |
 */
 
-Route::get('/reunion', function () {
-    return view('welcome');
+Route::get('/', function () {
+    if (Auth::check()) {
+        return redirect('/reunion');
+    }
+    return redirect('/admin/login');
 });
-Route::view('/calendrier', 'calendar');
-Route::view('/Untitled', 'Untitled');
-
-// Custom Routes
-use App\Http\Controllers\ReunionController;
-use App\Http\Controllers\OrganisationController;
 
 Route::middleware(['auth'])->group(function () {
-    Route::get('/reunions/list', [ReunionController::class, 'list'])->name('reunions.list');
-    Route::get('/organisations/data', [ReunionController::class, 'organisations'])->name('organisations.data'); // Renamed from list to avoid conflict
-    Route::get('/reunion-options', [ReunionController::class, 'getOptions'])->name('reunions.options');
-    Route::post('/reunions', [ReunionController::class, 'store'])->name('reunions.store');
-    Route::get('/notifications', [ReunionController::class, 'getNotifications'])->name('notifications.index');
-    Route::post('/notifications/{id}/read', [ReunionController::class, 'markNotificationAsRead'])->name('notifications.read');
-
-    // Organisation Management
-    Route::get('/organisations', [OrganisationController::class, 'index'])->name('organisations.list');
-    Route::get('/organisations/my', [OrganisationController::class, 'myOrganisation'])->name('organisations.my');
-    Route::get('/organisations/{organisation}', [OrganisationController::class, 'show'])->name('organisations.show');
-    Route::post('/organisations/{organisation}', [OrganisationController::class, 'update'])->name('organisations.update');
+    Route::get('/reunion', function () {
+        return view('welcome');
+    })->name('reunion');
 });
-
-Route::post('/logout', function () {
+Route::get('/logout', function () {
     Auth::logout();
     return redirect('/admin/login');
 })->name('logout');
-
-
 
 Route::group(['prefix' => 'admin'], function () {
     Route::post('login', [\App\Http\Controllers\CustomVoyagerAuthController::class, 'login'])->name('voyager.login');
     Voyager::routes();
 });
+
+Route::controller(ReunionController::class)->group(function () {
+    Route::get('/reunions/list', 'list')->name('reunions.list');
+    Route::post('/reunions','store')->name('reunions.store');
+    Route::put('/reunions/{id}', 'update')->name('reunions.update');
+    Route::delete('/reunions/{id}', 'destroy')->name('reunions.destroy');
+    Route::get('/notifications',  'getNotifications')->name('notifications.index');
+    Route::post('/notifications/{id}/read','markNotificationAsRead')->name('notifications.read');
+});
+
+Route::controller(OrganisationController::class)->group(function () {
+    Route::get('/organisations', 'index')->name('organisations.list');
+    Route::get('/organisations/my', 'myOrganisation')->name('organisations.my');
+    Route::post('/organisations/switch', 'switch')->name('organisations.switch');
+    Route::get('/organisations/{organisation}', 'show')->name('organisations.show');
+    Route::post('/organisations/{organisation}', 'update')->name('organisations.update');
+    Route::post('/organisations/{organisation}/members', 'addMember')->name('organisations.members.add');
+    Route::post('/organisations/{organisation}/members/{user}', 'updateMember')->name('organisations.members.update');
+    Route::delete('/organisations/{organisation}/members/{user}', 'removeMember')->name('organisations.members.remove');
+});
+
+

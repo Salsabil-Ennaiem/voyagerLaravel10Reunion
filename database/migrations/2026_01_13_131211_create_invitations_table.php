@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('invitations', function (Blueprint $table) {
             $table->id();                           // id_Inv
             
-            $table->foreignId('participant_id')     // id_participant → utilisateur
+            $table->foreignId('participant_id')     
                   ->constrained('users')
                   ->onDelete('cascade');
                   
@@ -19,11 +19,9 @@ return new class extends Migration
                   ->constrained('reunions')
                   ->onDelete('cascade');
 
-            $table->enum('statut', ['en_attente', 'accepte', 'refuse', 'peut-etre'])->default('en_attente');
+            $table->enum('statut', ['en_attente', 'accepte', 'refuse', 'excuse'])->default('en_attente');
+            $table->text('note')->nullable();
             $table->text('commentaire')->nullable();
-            $table->dateTime('date_presence')->nullable();   // date réelle de présence
-            $table->integer('note')->nullable()->unsigned()->check('note >= 0 AND note <= 5');
-
             $table->timestamps();
 
             $table->unique(['participant_id', 'reunion_id']);

@@ -20,7 +20,7 @@ return new class extends Migration
             $table->text('recommandations')->nullable();
             $table->text('solutions')->nullable();
             $table->dateTime('signe_at')->nullable();
-            $table->enum('statut', ['brouillon', 'valide', 'archive'])->default('brouillon');
+            $table->enum('statut', ['brouillon', 'valide', 'approver' ,'signer'])->default('brouillon');
             $table->string('doc_hash', 64)->nullable();     // SHA-256 ou autre hash du document
 
             $table->timestamps();

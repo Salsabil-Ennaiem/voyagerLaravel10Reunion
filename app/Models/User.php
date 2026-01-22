@@ -41,6 +41,11 @@ class User extends \TCG\Voyager\Models\User
         return $this->getRelationValue('role');
     }
 
+    public function getNameAttribute()
+    {
+        return trim("{$this->prenom} {$this->nom}") ?: $this->email;
+    }
+
     /**
      * The attributes that should be hidden for serialization.
      *
@@ -51,14 +56,31 @@ class User extends \TCG\Voyager\Models\User
         'remember_token',
     ];
 
-    public function managedOrganisation()
+    public function chefOfOrganisations()
     {
-        return $this->hasOne(Organisation::class, 'chef_organisation_id');
+        return $this->hasMany(Organisation::class, 'chef_organisation_id');
+    }
+
+    public function memberOfOrganisations()
+    {
+        return $this->belongsToMany(Organisation::class, 'membres', 'compte_id', 'organisation_id')
+                    ->withPivot('fonction', 'description');
+    }
+
+    public function isChefIn(int $orgId)
+    {
+        return $this->chefOfOrganisations()->where('id', $orgId)->exists();
+    }
+
+    public function isMemberIn(int $orgId)
+    {
+        return $this->memberOfOrganisations()->where('organisation_id', $orgId)->exists();
     }
 
     public function isChef()
     {
-        return ($this->getAttributes()['role'] ?? '') === 'chef_organisation';
+        // Global chef check (chef in at least one)
+        return $this->chefOfOrganisations()->exists();
     }
 
     public function isAdmin()
@@ -69,6 +91,11 @@ class User extends \TCG\Voyager\Models\User
     public function invitations()
     {
         return $this->hasMany(Invitation::class, 'participant_id');
+    }
+
+    public function getActiveOrganisationId()
+    {
+        return session('active_organisation_id');
     }
 
     /**

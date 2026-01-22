@@ -49,7 +49,6 @@ class Reunion extends Model
         'statut' => 'brouillon',
     ];
 
-    // Relationships
     public function organisation(): BelongsTo
     {
         return $this->belongsTo(Organisation::class);
@@ -60,7 +59,7 @@ class Reunion extends Model
         return $this->hasMany(Invitation::class);
     }
 
-    // Optional: scopes
+    //  scopes
     public function scopePlanifiees($query)
     {
         return $query->where('statut', 'planifiee');
@@ -81,11 +80,7 @@ class Reunion extends Model
         return $query->where('statut', 'brouillon');
     }
 
-    // Optional: helper methods / accessors
-    public function getIsFutureAttribute(): bool
-    {
-        return $this->date_debut->isFuture();
-    }
+
 
     public function getDurationInMinutesAttribute(): ?int
     {

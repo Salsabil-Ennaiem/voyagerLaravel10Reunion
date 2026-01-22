@@ -9,12 +9,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('reunions', function (Blueprint $table) {
-            $table->id();                           // id_Réunion
+            $table->id();                          
             $table->string('objet', 200);
             $table->text('description')->nullable();
-            $table->text('ordre_du_jour')->nullable();   // ordre_jour → ordre_du_jour
+            $table->text('ordre_du_jour')->nullable();   
             $table->dateTime('date_debut');
-            $table->dateTime('date_fin')->nullable();
+            $table->dateTime('date_fin');
             $table->string('lieu', 150)->nullable();
             $table->enum('type', ['presentiel', 'visio', 'hybride'])->default('presentiel');
             $table->enum('statut', ['brouillon', 'planifiee', 'en_cours', 'terminee', 'annulee'])

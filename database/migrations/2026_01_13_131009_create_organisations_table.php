@@ -18,6 +18,7 @@ return new class extends Migration
                   ->nullable()
                   ->constrained('users')
                   ->onDelete('set null');
+            $table->boolean('active')->default(true)->nullable();
             $table->string('image')->nullable();
             $table->timestamps();
         });

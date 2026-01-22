@@ -42,23 +42,23 @@ class Organisation extends Model
         return $this->hasMany(Reunion::class);
     }
 
-//scope
-
-    public function scopeWithChef($query)
+    public function members()
     {
-        return $query->whereNotNull('chef_organisation_id');
+        return $this->belongsToMany(User::class, 'membres', 'organisation_id', 'compte_id')
+                    ->withPivot('fonction', 'description');
     }
 
-    public function scopeWithoutChef($query)
+
+    public function activeOrganisation()
     {
-        return $query->whereNull('chef_organisation_id');
+        return $this->members()
+            ->wherePivot('is_active', true)
+            ->first();
     }
 
-//Accessors / Helpers
-
-    public function getHasChefAttribute(): bool
+    public function getActiveOrganisationId()
     {
-        return $this->chef_organisation_id !== null;
+        return $this->activeOrganisation()?->id;
     }
 
     /**
@@ -69,25 +69,8 @@ class Organisation extends Model
         if (!$this->image) {
             return null;
         }
-
+ return $this->image; // ← most common when storing full URL
         // Adjust according to your storage setup
-        // Examples:
-
-        // If using public disk
         // return asset('storage/organisations/' . $this->image);
-
-        // If using custom path or S3 / Cloudinary / etc.
-        return $this->image; // ← most common when storing full URL
-    }
-
-    /**
-     * Short version of the name (useful for badges, avatars, etc.)
-     */
-    public function getShortNameAttribute(): string
-    {
-        $words = explode(' ', trim($this->nom));
-        return count($words) >= 2
-            ? strtoupper(substr($words[0], 0, 1) . substr(end($words), 0, 1))
-            : strtoupper(substr($this->nom, 0, 2));
     }
 }

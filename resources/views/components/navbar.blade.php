@@ -51,6 +51,19 @@
                         });
                         this.fetchNotifications();
                     },
+                    async navigateToReunion(n) {
+                        // Mark as read first
+                        await this.markAsRead(n.id);
+                        
+                        // Navigate to calendar with the reunion date
+                        if (n.data && n.data.date_debut) {
+                            const dateStr = n.data.date_debut.split('T')[0]; // Extract YYYY-MM-DD
+                            window.location.href = `/reunion?date=${dateStr}`;
+                        } else {
+                            // Fallback: just go to reunion page
+                            window.location.href = '/reunion';
+                        }
+                    },
                     init() {
                         this.fetchNotifications();
                         setInterval(() => this.fetchNotifications(), 15000);
@@ -76,19 +89,71 @@
                                 <div class="p-8 text-center text-gray-400 text-sm">Aucune notification</div>
                             </template>
                             <template x-for="n in notifications" :key="n.id">
-                                <div class="block px-5 py-4 hover:bg-indigo-50/30 transition cursor-pointer" @click="markAsRead(n.id)">
-                                    <p class="text-sm font-medium text-gray-900" x-text="n.data.message"></p>
-                                    <p class="text-xs text-gray-500 mt-1" x-text="n.created_at"></p>
+                                <div class="block px-5 py-4 hover:bg-indigo-50/30 transition cursor-pointer group" 
+                                     @click="navigateToReunion(n)">
+                                    <p class="text-sm font-medium text-gray-900 group-hover:text-indigo-600 transition" x-text="n.data.message"></p>
+                                    <p class="text-xs text-gray-500 mt-1 flex items-center justify-between">
+                                        <span x-text="n.created_at"></span>
+                                        <span class="text-indigo-500 opacity-0 group-hover:opacity-100 transition text-[10px] flex items-center gap-1">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                            Voir
+                                        </span>
+                                    </p>
                                 </div>
                             </template>
                         </div>
-                        @auth
-                        <div class="px-5 py-3 bg-gray-50/60 text-center border-t text-xs font-bold text-indigo-600">
-                            <a href="/calendrier">Voir le calendrier</a>
-                        </div>
-                        @endauth
+                    
                     </div>
                 </div>
+
+                <!-- Organisation Switcher -->
+                @auth
+                @php
+                    $uOrgs = Auth::user()->chefOfOrganisations->merge(Auth::user()->memberOfOrganisations)->unique('id');
+                    $activeOrgId = session('active_organisation_id');
+                    $currentOrg = $uOrgs->where('id', $activeOrgId)->first() ?: $uOrgs->first();
+                @endphp
+                
+                @if(Auth::user()->isAdmin())
+                    {{-- Admin has global access, no need for space switcher --}}
+                @elseif($uOrgs->count() > 0)
+                <div class="relative" x-data="{ switcherOpen: false }">
+                    <button @click="switcherOpen = !switcherOpen" @click.away="switcherOpen = false" 
+                            class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50/50 hover:bg-indigo-100 border border-indigo-100 transition shadow-sm">
+                        <i class="fas fa-building text-indigo-500 text-xs"></i>
+                        <span class="text-xs font-bold text-indigo-700 max-w-[100px] truncate">
+                            {{ $currentOrg->nom ?? 'Choisir org' }}
+                        </span>
+                        <i class="fas fa-chevron-down text-[10px] text-indigo-400"></i>
+                    </button>
+                    
+                    <div x-show="switcherOpen" x-transition 
+                         class="absolute right-0 mt-2 w-56 bg-white shadow-2xl rounded-2xl border border-gray-100 py-2 z-50 overflow-hidden" 
+                         style="display: none;">
+                        <div class="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-50 mb-1">
+                            Switcher d'organisation
+                        </div>
+                        @foreach($uOrgs as $org)
+                        <form action="{{ route('organisations.switch') }}" method="POST">
+                            @csrf
+                            <input type="hidden" name="organisation_id" value="{{ $org->id }}">
+                            <button type="submit" class="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50 transition flex items-center justify-between group">
+                                <span class="{{ $activeOrgId == $org->id ? 'font-bold text-indigo-600' : 'text-gray-700' }}">
+                                    {{ $org->nom }}
+                                </span>
+                                @if($activeOrgId == $org->id)
+                                    <i class="fas fa-check text-indigo-500 text-xs"></i>
+                                @endif
+                                <span class="text-[10px] opacity-0 group-hover:opacity-100 transition text-gray-400 italic ml-2">
+                                    {{ Auth::user()->isChefIn($org->id) ? 'Chef' : 'Membre' }}
+                                </span>
+                            </button>
+                        </form>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
+                @endauth
 
                 <!-- Profile Dropdown (Desktop) -->
                 @auth
@@ -102,11 +167,10 @@
                             {{ Auth::user()->email }}
                         </div>
                         @if(Auth::user()->hasPermission('browse_admin'))
-                            <a href="{{ route('voyager.profile') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50">Profil</a>
+                            <a href="{{ route('voyager.profile') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50">Profil Admin</a>
                         @endif
-                        <form action="{{ route('logout') }}" method="POST">@csrf
-                            <button type="submit" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Déconnexion</button>
-                        </form>
+                        <a href="{{ route('organisations.my') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50">Mon Organisation</a>
+                        <a href="{{ route('logout') }}" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50">Déconnexion</a>
                     </div>
                 </div>
                 @endauth
@@ -144,6 +208,40 @@
 
         <!-- Navigation Links -->
         <nav class="flex flex-col gap-3 flex-1 text-base">
+            <!-- Mobile Org Switcher -->
+            @auth
+            @php
+                $uOrgs = Auth::user()->chefOfOrganisations->merge(Auth::user()->memberOfOrganisations)->unique('id');
+                $activeOrgId = session('active_organisation_id');
+                $currentOrg = $uOrgs->where('id', $activeOrgId)->first() ?: $uOrgs->first();
+            @endphp
+            @if(Auth::user()->isAdmin())
+                 {{-- No switcher for admin --}}
+            @elseif($uOrgs->count() > 1)
+            <div class="mb-4 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
+                <p class="text-[10px] font-bold text-indigo-400 uppercase mb-2 ml-1">Organisation Active</p>
+                <div x-data="{ mobSwitchOpen: false }">
+                    <button @click="mobSwitchOpen = !mobSwitchOpen" class="w-full flex items-center justify-between text-indigo-700 font-bold text-sm">
+                        <span class="truncate">{{ $currentOrg->nom ?? 'Choisir...' }}</span>
+                        <i class="fas fa-sync-alt text-xs transition-transform" :class="mobSwitchOpen ? 'rotate-180' : ''"></i>
+                    </button>
+                    
+                    <div x-show="mobSwitchOpen" x-transition class="mt-3 space-y-2">
+                        @foreach($uOrgs as $org)
+                        <form action="{{ route('organisations.switch') }}" method="POST">
+                            @csrf
+                            <input type="hidden" name="organisation_id" value="{{ $org->id }}">
+                            <button type="submit" class="w-full text-left px-3 py-2 text-xs rounded-xl {{ $activeOrgId == $org->id ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 border border-gray-100' }}">
+                                {{ $org->nom }} ({{ Auth::user()->isChefIn($org->id) ? 'Chef' : 'Membre' }})
+                            </button>
+                        </form>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+            @endif
+            @endauth
+
             <a href="/reunion" 
                class="flex items-center gap-3 px-4 py-3 font-bold rounded-xl transition shadow-sm border
                {{ request()->is('reunion*') ? 'text-indigo-700 bg-indigo-100/80 border-indigo-200' : 'text-gray-800 bg-indigo-50/50 hover:bg-indigo-100/50 border-indigo-100/20' }}">

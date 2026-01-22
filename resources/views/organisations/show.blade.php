@@ -53,6 +53,12 @@
                 {{ session('success') }}
             </div>
         @endif
+        @if(session('error'))
+            <div class="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl flex items-center gap-3">
+                <i class="fas fa-exclamation-circle"></i>
+                {{ session('error') }}
+            </div>
+        @endif
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <!-- Sidebar Stats/Info -->
@@ -84,15 +90,19 @@
                         <span class="text-sm text-gray-600">Réunions</span>
                         <span class="font-bold text-indigo-600">{{ $organisation->reunions()->count() }}</span>
                     </div>
+                    <div class="flex items-center justify-between py-2 border-b border-gray-100">
+                        <span class="text-sm text-gray-600">Membres</span>
+                        <span class="font-bold text-indigo-600">{{ $organisation->members()->count() }}</span>
+                    </div>
                 </div>
             </div>
 
             <!-- Main Content: Edit Form -->
-            <div class="lg:col-span-2">
+            <div class="lg:col-span-2 space-y-8">
                 <div class="glass rounded-3xl p-8 shadow-xl border-white/40">
                     <div class="flex items-center justify-between mb-8">
-                        <h2 class="text-xl font-bold text-gray-900">Éditer l'Organisation</h2>
-                        <i class="fas fa-edit text-indigo-500 text-xl"></i>
+                        <h2 class="text-xl font-bold text-gray-900">{{ $isChef ? 'Éditer l\'Organisation' : 'Détails de l\'Organisation' }}</h2>
+                        <i class="fas {{ $isChef ? 'fa-edit' : 'fa-info-circle' }} text-indigo-500 text-xl"></i>
                     </div>
 
                     <form action="{{ route('organisations.update', $organisation->id) }}" method="POST" enctype="multipart/form-data" class="space-y-6">
@@ -102,32 +112,53 @@
                             <div class="space-y-2">
                                 <label for="nom" class="text-xs font-bold text-gray-500 uppercase ml-1">Nom de l'organisation</label>
                                 <input type="text" name="nom" id="nom" value="{{ old('nom', $organisation->nom) }}" 
-                                       class="w-full px-4 py-3 rounded-2xl bg-white/50 border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium">
+                                       {{ !$isChef ? 'readonly' : '' }}
+                                       class="w-full px-4 py-3 rounded-2xl {{ !$isChef ? 'bg-gray-50' : 'bg-white/50' }} border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
                                 @error('nom') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                             </div>
 
                             <div class="space-y-2">
                                 <label for="email_contact" class="text-xs font-bold text-gray-500 uppercase ml-1">Email de contact</label>
                                 <input type="email" name="email_contact" id="email_contact" value="{{ old('email_contact', $organisation->email_contact) }}" 
-                                       class="w-full px-4 py-3 rounded-2xl bg-white/50 border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium">
+                                       {{ !$isChef ? 'readonly' : '' }}
+                                       class="w-full px-4 py-3 rounded-2xl {{ !$isChef ? 'bg-gray-50' : 'bg-white/50' }} border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
                                 @error('email_contact') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                             </div>
                         </div>
 
+                        @if(Auth::user()->isAdmin())
+                        <div class="space-y-2">
+                            <label for="chef_organisation_id" class="text-xs font-bold text-gray-500 uppercase ml-1">Gérant (Chef d'Organisation)</label>
+                            <select name="chef_organisation_id" id="chef_organisation_id" 
+                                    class="w-full px-4 py-3 rounded-2xl bg-white/50 border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
+                                <option value="">Choisir un chef...</option>
+                                @foreach($allUsers as $u)
+                                    <option value="{{ $u->id }}" {{ $organisation->chef_organisation_id == $u->id ? 'selected' : '' }}>
+                                        {{ $u->name }} ({{ $u->email }})
+                                    </option>
+                                @endforeach
+                            </select>
+                            <p class="text-[10px] text-gray-400 ml-1">Seul un administrateur peut changer le chef d'une organisation.</p>
+                        </div>
+                        @endif
+
                         <div class="space-y-2">
                             <label for="adresse" class="text-xs font-bold text-gray-500 uppercase ml-1">Adresse</label>
                             <input type="text" name="adresse" id="adresse" value="{{ old('adresse', $organisation->adresse) }}" 
-                                   class="w-full px-4 py-3 rounded-2xl bg-white/50 border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium">
+                                   {{ !$isChef ? 'readonly' : '' }}
+                                   class="w-full px-4 py-3 rounded-2xl {{ !$isChef ? 'bg-gray-50' : 'bg-white/50' }} border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
                             @error('adresse') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                         </div>
 
                         <div class="space-y-2">
                             <label for="description" class="text-xs font-bold text-gray-500 uppercase ml-1">Description</label>
                             <textarea name="description" id="description" rows="4" 
-                                      class="w-full px-4 py-3 rounded-2xl bg-white/50 border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium resize-none">{{ old('description', $organisation->description) }}</textarea>
+                                      {{ !$isChef ? 'readonly' : '' }}
+                                      class="w-full px-4 py-3 rounded-2xl {{ !$isChef ? 'bg-gray-50' : 'bg-white/50' }} border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium resize-none text-gray-700">{{ old('description', $organisation->description) }}</textarea>
                             @error('description') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                         </div>
 
+                        @if($isChef)
                         <div class="space-y-2">
                             <label class="text-xs font-bold text-gray-500 uppercase ml-1">Logo de l'organisation</label>
                             <div class="relative group cursor-pointer">
@@ -148,20 +179,138 @@
                                 Enregistrer les modifications
                             </button>
                         </div>
+                        @else
+                        <div class="pt-4 p-4 bg-indigo-50 rounded-2xl text-indigo-700 text-center text-sm font-medium">
+                            <i class="fas fa-lock mr-2"></i> Vous consultez cette organisation en tant que membre.
+                        </div>
+                        @endif
                     </form>
+                </div>
+
+                <!-- Members Section -->
+                <div class="glass rounded-3xl p-8 shadow-xl border-white/40">
+                    <div class="flex items-center justify-between mb-8">
+                        <h2 class="text-xl font-bold text-gray-900">Membres</h2>
+                        @if($isChef)
+                        <button onclick="document.getElementById('addMemberModal').classList.remove('hidden')" class="px-4 py-2 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-xl hover:bg-indigo-100 transition">
+                            <i class="fas fa-plus mr-1"></i> Ajouter
+                        </button>
+                        @endif
+                    </div>
+
+                    <div class="space-y-4">
+                        @forelse($organisation->members as $member)
+                        <div class="flex items-center justify-between p-4 rounded-2xl bg-white/30 border border-white/50 hover:bg-white/50 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <img src="{{ Voyager::image($member->avatar) }}" class="w-10 h-10 rounded-full border border-gray-100">
+                                <div>
+                                    <p class="text-sm font-bold text-gray-900">{{ $member->name }}</p>
+                                    <p class="text-[10px] text-gray-500">{{ $member->pivot->fonction ?: 'Membre' }}</p>
+                                </div>
+                            </div>
+                            @if($isChef)
+                            <div class="flex items-center gap-2">
+                                <button onclick="openEditMember('{{ $member->id }}', '{{ $member->pivot->fonction }}')" class="p-2 text-indigo-400 hover:text-indigo-600 transition">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <form action="{{ route('organisations.members.remove', [$organisation->id, $member->id]) }}" method="POST" onsubmit="return confirm('Retirer ce membre ?')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="p-2 text-red-400 hover:text-red-600 transition">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </form>
+                            </div>
+                            @endif
+                        </div>
+                        @empty
+                        <p class="text-center py-8 text-gray-400 text-sm italic">Aucun membre dans cette organisation.</p>
+                        @endforelse
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
+    @if($isChef)
+    <!-- Add Member Modal -->
+    <div id="addMemberModal" class="fixed inset-0 z-[100] hidden">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="this.parentElement.classList.add('hidden')"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-md">
+            <div class="glass rounded-3xl p-8 shadow-2xl border-white/40">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-lg font-bold text-gray-900">Ajouter un Membre</h3>
+                    <button onclick="document.getElementById('addMemberModal').classList.add('hidden')" class="p-2 text-gray-400 hover:text-gray-900 transition">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form action="{{ route('organisations.members.add', $organisation->id) }}" method="POST" class="space-y-4">
+                    @csrf
+                    <div class="space-y-2">
+                        <label class="text-xs font-bold text-gray-500 uppercase ml-1">Email du membre</label>
+                        <input type="email" name="email" required placeholder="exemple@test.com" 
+                               class="w-full px-4 py-3 rounded-2xl bg-white border border-gray-200 focus:border-indigo-500 outline-none font-medium text-gray-700">
+                        <p class="text-[10px] text-gray-400 ml-1">Si l'utilisateur n'existe pas, un compte sera créé automatiquement.</p>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-xs font-bold text-gray-500 uppercase ml-1">Fonction</label>
+                        <input type="text" name="fonction" placeholder="Ex: Développeur, Expert..." class="w-full px-4 py-3 rounded-2xl bg-white border border-gray-200 focus:border-indigo-500 outline-none font-medium">
+                    </div>
+                    <button type="submit" class="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg hover:bg-indigo-700 transition transform active:scale-95 mt-4">
+                        Ajouter à l'organisation
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Member Modal -->
+    <div id="editMemberModal" class="fixed inset-0 z-[100] hidden">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="this.parentElement.classList.add('hidden')"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-md">
+            <div class="glass rounded-3xl p-8 shadow-2xl border-white/40">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-lg font-bold text-gray-900">Éditer le Membre</h3>
+                    <button onclick="document.getElementById('editMemberModal').classList.add('hidden')" class="p-2 text-gray-400 hover:text-gray-900 transition">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="editMemberForm" action="" method="POST" class="space-y-4">
+                    @csrf
+                    <div class="space-y-2">
+                        <label class="text-xs font-bold text-gray-500 uppercase ml-1">Nouvelle Fonction</label>
+                        <input type="text" name="fonction" id="edit_fonction" class="w-full px-4 py-3 rounded-2xl bg-white border border-gray-200 focus:border-indigo-500 outline-none font-medium">
+                    </div>
+                    <button type="submit" class="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg hover:bg-indigo-700 transition transform active:scale-95 mt-4">
+                        Enregistrer
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    @endif
+
     <script>
         function previewImage(event) {
             const reader = new FileReader();
             reader.onload = function() {
-                // Optional: update a preview element
+                // Optional: image preview logic
             }
             reader.readAsDataURL(event.target.files[0]);
         }
+
+        @if($isChef)
+        function openEditMember(memberId, currentFonction) {
+            const modal = document.getElementById('editMemberModal');
+            const form = document.getElementById('editMemberForm');
+            const input = document.getElementById('edit_fonction');
+            
+            form.action = `/organisations/{{ $organisation->id }}/members/${memberId}`;
+            input.value = currentFonction;
+            
+            modal.classList.remove('hidden');
+        }
+        @endif
     </script>
 </body>
 </html>

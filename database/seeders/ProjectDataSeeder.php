@@ -146,5 +146,19 @@ class ProjectDataSeeder extends Seeder
         foreach ($reunions as $reunionData) {
             Reunion::create($reunionData);
         }
+
+        // 4. Seed Membres (Pivot table)
+        // Chef 1 is also a member of Org 2
+        $org2->members()->syncWithoutDetaching([
+            $chef1->id => ['fonction' => 'Conseiller Technique', 'description' => 'Appui aux RH pour les profils techniques']
+        ]);
+
+        // Membre is a member of both
+        $org1->members()->syncWithoutDetaching([
+            $membre->id => ['fonction' => 'Développeur Junior', 'description' => 'Equipe backend']
+        ]);
+        $org2->members()->syncWithoutDetaching([
+            $membre->id => ['fonction' => 'Représentant du personnel', 'description' => 'Lien avec la direction technique']
+        ]);
     }
 }

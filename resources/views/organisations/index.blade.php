@@ -41,34 +41,52 @@
                 </div>
 
                 <div class="p-8 pt-0 -mt-10 relative flex-1 flex flex-col">
-                    <div class="w-20 h-20 rounded-2xl bg-white p-1 shadow-lg border-4 border-white mb-4">
-                        <div class="w-full h-full rounded-xl flex items-center justify-center bg-indigo-50 text-indigo-600 font-bold text-2xl overflow-hidden">
-                            @if($org->image)
-                                 <img src="{{ str_starts_with($org->image, 'http') ? $org->image : asset('storage/' . $org->image) }}" class="w-full h-full object-cover">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-20 h-20 rounded-2xl bg-white p-1 shadow-lg border-4 border-white">
+                            <div class="w-full h-full rounded-xl flex items-center justify-center bg-indigo-50 text-indigo-600 font-bold text-2xl overflow-hidden">
+                                @if($org->image)
+                                     <img src="{{ str_starts_with($org->image, 'http') ? $org->image : asset('storage/' . $org->image) }}" class="w-full h-full object-cover">
+                                @else
+                                    {{ $org->short_name }}
+                                @endif
+                            </div>
+                        </div>
+                        
+                        <div class="mt-12 flex flex-col gap-2 items-end">
+                            @if(Auth::user()->isChefIn($org->id))
+                                <span class="px-2 py-1 bg-purple-100 text-purple-700 text-[10px] font-bold rounded-lg border border-purple-200 uppercase">Chef</span>
                             @else
-                                {{ $org->short_name }}
+                                <span class="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-lg border border-blue-200 uppercase">Membre</span>
+                            @endif
+
+                            @if(session('active_organisation_id') == $org->id)
+                                <span class="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-lg border border-green-200 uppercase flex items-center gap-1">
+                                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Actif
+                                </span>
                             @endif
                         </div>
                     </div>
 
                     <h2 class="text-xl font-bold text-gray-900 mb-2 truncate group-hover:text-indigo-600 transition-colors">{{ $org->nom }}</h2>
                     
-                    <div class="space-y-3 mb-6 flex-1">
-                        <div class="flex items-center gap-2 text-sm text-gray-600">
-                             <i class="fas fa-user-circle text-gray-400"></i>
-                             <span class="font-medium">Chef: <span class="text-gray-900">{{ $org->chef->name ?? 'Aucun' }}</span></span>
-                        </div>
-                        <div class="flex items-center gap-2 text-sm text-gray-600">
-                             <i class="fas fa-calendar-check text-gray-400"></i>
-                             <span class="font-medium">Réunions: <span class="text-gray-900">{{ $org->reunions()->count() }}</span></span>
-                        </div>
+                    <div class="space-y-3 mb-6 flex-1 text-gray-500 text-xs">
+                        <p class="line-clamp-2 italic">{{ $org->description ?? 'Aucune description disponible.' }}</p>
                     </div>
 
-                    <a href="{{ route('organisations.show', $org->id) }}" class="block w-full py-3 bg-white border border-gray-200 text-gray-700 font-bold text-center rounded-2xl hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-sm">
-                        Gérer l'organisation
-                    </a>
-                    {{-- Note: update route is used for both view and submit, but for index we just need to link to show page logic --}}
-                    {{-- Actually I'll make index link to a show page even for admin --}}
+                    <div class="flex flex-col gap-2">
+                        @if(session('active_organisation_id') != $org->id)
+                            <form action="{{ route('organisations.switch') }}" method="POST">
+                                @csrf
+                                <input type="hidden" name="organisation_id" value="{{ $org->id }}">
+                                <button type="submit" class="w-full py-2.5 bg-indigo-600 text-white font-bold text-center rounded-2xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 text-sm">
+                                    Choisir cette organisation
+                                </button>
+                            </form>
+                        @endif
+                        <a href="{{ route('organisations.show', $org->id) }}" class="block w-full py-2.5 bg-white border border-gray-200 text-gray-700 font-bold text-center rounded-2xl hover:bg-gray-50 transition-all text-sm">
+                            Voir les détails
+                        </a>
+                    </div>
                 </div>
             </div>
             @endforeach
