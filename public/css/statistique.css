@@ -1,0 +1,12 @@
+        @keyframes stats-spin {
+            0% { transform: rotate(0deg); animation-timing-function: ease-in; }
+            30% { transform: rotate(720deg); animation-timing-function: linear; }
+            70% { transform: rotate(1080deg); animation-timing-function: ease-out; }
+            100% { transform: rotate(1440deg); }
+        }
+        .animate-stats-spin {
+            animation: stats-spin 8s infinite;
+        }
+        .pause {
+            animation-play-state: paused !important;
+        }

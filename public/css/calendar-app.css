@@ -1,0 +1,13 @@
+        .day-cell:hover { transform: scale(1.03); transition: all 0.15s; }
+        .modal { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .time-slot:hover { transform: translateX(3px); background-color: #eef2ff; }
+        .ferie { background-color: #fee2e2 !important; border-color: #ef4444; color: #991b1b; font-weight: 600; }
+        
+        /* Status Colors mapped from meeting statuses */
+        .dot-brouillon { background-color: #9ca3af; } /* Gray 400 */
+        .dot-planifiee { background-color: #3b82f6; } /* Blue 500 */
+        .dot-en_cours { background-color: #22c55e; }  /* Green 500 */
+        .dot-terminee { background-color: #4f46e5; }  /* Indigo 600 */
+        .dot-annulee { background-color: #ef4444; }   /* Red 500 */
+        

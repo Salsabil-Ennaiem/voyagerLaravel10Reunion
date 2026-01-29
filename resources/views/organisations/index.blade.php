@@ -20,7 +20,7 @@
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
             <div>
                 <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">Organisations</h1>
-                <p class="text-gray-500 font-medium mt-1">Gérez toutes les organisations et leurs gérants.</p>
+                <p class="text-gray-500 font-medium mt-1">Les organisations et leurs gérants.</p>
             </div>
             <div class="flex items-center gap-3">
                  <span class="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-full text-sm font-bold border border-indigo-100 italic">
@@ -32,7 +32,9 @@
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             @foreach($organisations as $org)
             <div class="glass rounded-[2rem] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col group border-white/40">
-                <!-- Org Image / Mock Header -->
+                <a href="{{ route('organisations.show', $org->id) }}">
+    
+            <!-- Org Image / Mock Header -->
                 <div class="h-32 bg-gradient-to-r from-indigo-500 to-purple-600 relative overflow-hidden">
                     <div class="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors"></div>
                     @if($org->image)
@@ -55,7 +57,7 @@
                         <div class="mt-12 flex flex-col gap-2 items-end">
                             @if(Auth::user()->isChefIn($org->id))
                                 <span class="px-2 py-1 bg-purple-100 text-purple-700 text-[10px] font-bold rounded-lg border border-purple-200 uppercase">Chef</span>
-                            @else
+                            @elseif ((!Auth::user()->isAdmin())&&(!Auth::user()->isChefIn($org->id)))
                                 <span class="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-lg border border-blue-200 uppercase">Membre</span>
                             @endif
 
@@ -74,7 +76,7 @@
                     </div>
 
                     <div class="flex flex-col gap-2">
-                        @if(session('active_organisation_id') != $org->id)
+                        @if((session('active_organisation_id') != $org->id)&& (!Auth::user()->isAdmin()))
                             <form action="{{ route('organisations.switch') }}" method="POST">
                                 @csrf
                                 <input type="hidden" name="organisation_id" value="{{ $org->id }}">
@@ -83,11 +85,12 @@
                                 </button>
                             </form>
                         @endif
-                        <a href="{{ route('organisations.show', $org->id) }}" class="block w-full py-2.5 bg-white border border-gray-200 text-gray-700 font-bold text-center rounded-2xl hover:bg-gray-50 transition-all text-sm">
+                        <a href="{{ route('organisations.show', $org->id) }}" class="block w-full py-2.5 bg-white border border-gray-200 text-gray-700 font-bold text-center rounded-2xl hover:bg-gray-200 transition-all text-sm">
                             Voir les détails
                         </a>
                     </div>
                 </div>
+</a>
             </div>
             @endforeach
         </div>

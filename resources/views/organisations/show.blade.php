@@ -28,7 +28,7 @@
             
             <div class="absolute bottom-0 left-0 w-full p-6 flex flex-col sm:flex-row items-end sm:items-center gap-6 bg-gradient-to-t from-black/60 to-transparent">
                 <div class="relative">
-                    <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl border-4 border-white shadow-xl overflow-hidden bg-white">
+                    <div id="orgLogoContainer" class="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl border-4 border-white shadow-xl overflow-hidden bg-white">
                         @if($organisation->image)
                             <img src="{{ str_starts_with($organisation->image, 'http') ? $organisation->image : asset('storage/' . $organisation->image) }}" 
                                  alt="{{ $organisation->nom }}" 
@@ -63,19 +63,11 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <!-- Sidebar Stats/Info -->
             <div class="lg:col-span-1 space-y-6">
+                <!--
                 <div class="glass rounded-3xl p-6 shadow-sm border-white/40">
                     <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Informations</h3>
                     <div class="space-y-4">
                         <div class="flex items-center gap-3 text-gray-700">
-                            <i class="fas fa-envelope w-5 text-indigo-500"></i>
-                            <span class="text-sm truncate">{{ $organisation->email_contact ?? 'Pas d\'email' }}</span>
-                        </div>
-                        <div class="flex items-start gap-3 text-gray-700">
-                            <i class="fas fa-map-marker-alt w-5 mt-1 text-indigo-500"></i>
-                            <span class="text-sm">{{ $organisation->adresse ?? 'Pas d\'adresse' }}</span>
-                        </div>
-                        <div class="flex items-center gap-3 text-gray-700">
-                            <i class="fas fa-user-tie w-5 text-indigo-500"></i>
                             <div class="text-sm">
                                 <p class="font-bold">{{ $organisation->chef->name ?? 'Aucun chef' }}</p>
                                 <p class="text-xs text-gray-500">Gérant</p>
@@ -83,7 +75,7 @@
                         </div>
                     </div>
                 </div>
-
+ -->
                 <div class="glass rounded-3xl p-6 shadow-sm border-white/40">
                     <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Activités</h3>
                     <div class="flex items-center justify-between py-2 border-b border-gray-100">
@@ -110,6 +102,7 @@
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="space-y-2">
+                                <i class="fa-solid fa-building w-5 text-indigo-500"></i>
                                 <label for="nom" class="text-xs font-bold text-gray-500 uppercase ml-1">Nom de l'organisation</label>
                                 <input type="text" name="nom" id="nom" value="{{ old('nom', $organisation->nom) }}" 
                                        {{ !$isChef ? 'readonly' : '' }}
@@ -118,6 +111,7 @@
                             </div>
 
                             <div class="space-y-2">
+                                <i class="fas fa-envelope w-5 text-indigo-500"></i>
                                 <label for="email_contact" class="text-xs font-bold text-gray-500 uppercase ml-1">Email de contact</label>
                                 <input type="email" name="email_contact" id="email_contact" value="{{ old('email_contact', $organisation->email_contact) }}" 
                                        {{ !$isChef ? 'readonly' : '' }}
@@ -128,6 +122,7 @@
 
                         @if(Auth::user()->isAdmin())
                         <div class="space-y-2">
+                            <i class="fas fa-user-tie w-5 text-indigo-500"></i>
                             <label for="chef_organisation_id" class="text-xs font-bold text-gray-500 uppercase ml-1">Gérant (Chef d'Organisation)</label>
                             <select name="chef_organisation_id" id="chef_organisation_id" 
                                     class="w-full px-4 py-3 rounded-2xl bg-white/50 border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
@@ -143,6 +138,7 @@
                         @endif
 
                         <div class="space-y-2">
+                            <i class="fas fa-map-marker-alt w-5 mt-1 text-indigo-500"></i>
                             <label for="adresse" class="text-xs font-bold text-gray-500 uppercase ml-1">Adresse</label>
                             <input type="text" name="adresse" id="adresse" value="{{ old('adresse', $organisation->adresse) }}" 
                                    {{ !$isChef ? 'readonly' : '' }}
@@ -247,8 +243,8 @@
                 <form action="{{ route('organisations.members.add', $organisation->id) }}" method="POST" class="space-y-4">
                     @csrf
                     <div class="space-y-2">
-                        <label class="text-xs font-bold text-gray-500 uppercase ml-1">Email du membre</label>
-                        <input type="email" name="email" required placeholder="exemple@test.com" 
+                        <label for="email_membre_add" class="text-xs font-bold text-gray-500 uppercase ml-1">Email du membre</label>
+                        <input id="email_membre_add" type="email" name="email" required placeholder="exemple@test.com" 
                                class="w-full px-4 py-3 rounded-2xl bg-white border border-gray-200 focus:border-indigo-500 outline-none font-medium text-gray-700">
                         <p class="text-[10px] text-gray-400 ml-1">Si l'utilisateur n'existe pas, un compte sera créé automatiquement.</p>
                     </div>
@@ -292,11 +288,15 @@
 
     <script>
         function previewImage(event) {
-            const reader = new FileReader();
-            reader.onload = function() {
-                // Optional: image preview logic
+            const input = event.target;
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const container = document.getElementById('orgLogoContainer');
+                    container.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+                };
+                reader.readAsDataURL(input.files[0]);
             }
-            reader.readAsDataURL(event.target.files[0]);
         }
 
         @if($isChef)
@@ -312,5 +312,6 @@
         }
         @endif
     </script>
+    
 </body>
 </html>

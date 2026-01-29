@@ -25,7 +25,6 @@ class User extends \TCG\Voyager\Models\User
         'nom',
         'prenom',
         'telephone',
-        // 'role',
         'actif',
         'image',
         'role_id',

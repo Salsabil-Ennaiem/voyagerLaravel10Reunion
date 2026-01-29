@@ -3,21 +3,193 @@
 namespace App\Http\Controllers;
 
 use App\Models\Reunion;
+use App\Models\Organisation; 
+use App\Models\User;
+use App\Models\Invitation;
+use App\Http\Requests\StoreReunionRequest;
+use App\Http\Requests\UpdateReunionRequest;
+use App\Notifications\ReunionUpdatedNotification;
 use Illuminate\Http\Request;
-use App\Notifications\ReunionUpdatedNotification ; 
-use Illuminate\Support\Facades\DB;
-use App\Models\Invitation ;
-use Carbon\Carbon;
-use App\Models\User ;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache; 
+
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Str;
 
 class ReunionController extends Controller
 {
+    public function __construct()
+    {
+        // Automatically authorize resource actions based on ReunionPolicy
+        // Maps: index->viewAny, store->create, show->view, update->update, destroy->delete
+        // Because of custom routes naming ('list'), we handle 'viewAny' manually in list()
+        // But store, update, destroy are covered if we use correct route params.
+        $this->authorizeResource(Reunion::class, 'reunion');
+    }
+
+    /**
+     * Export reunions to PDF or Excel
+     */
+    public function export(Request $request)
+    {
+        $this->authorize('viewAny', Reunion::class);
+
+        $orgId = $request->input('organisation_id');
+        $format = $request->input('format', 'pdf');
+
+        $query = Reunion::with('organisation', 'invitations');
+
+        $user = auth()->user();
+        if ($user) {
+            if ($user->isAdmin()) {
+                if ($orgId) { 
+                    $query->where('organisation_id', $orgId); 
+                }
+            } else {
+                
+                $activeOrgId = $orgId ?: $user->getActiveOrganisationId();
+                if ($activeOrgId) {
+                    $query->where('organisation_id', $activeOrgId);
+                    
+                    if (!$user->isChefIn($activeOrgId)) {
+                        $query->whereHas('invitations', function($q) use ($user) {
+                            $q->where('email', $user->email);
+                        });
+                    }
+                } else {
+                    // If no active org selected, show all reunions from all their orgs
+                    $chefOrgIds = $user->chefOfOrganisations()->pluck('id')->toArray();
+                    $memberOrgIds = $user->memberOfOrganisations()->pluck('organisation_id')->toArray();
+                    
+                    $query->where(function($q) use ($user, $chefOrgIds, $memberOrgIds) {
+                        if (!empty($chefOrgIds)) {
+                            $q->orWhereIn('organisation_id', $chefOrgIds);
+                        }
+                        if (!empty($memberOrgIds)) {
+                            $q->orWhere(function($sub) use ($user, $memberOrgIds) {
+                                $sub->whereIn('organisation_id', $memberOrgIds)
+                                    ->whereHas('invitations', function($inv) use ($user) {
+                                        $inv->where('email', $user->email);
+                                    });
+                            });
+                        }
+                        
+                        // If they have no orgs at all, they see nothing
+                        if (empty($chefOrgIds) && empty($memberOrgIds)) {
+                            $q->whereRaw('1 = 0');
+                        }
+                    });
+                }
+            }
+        }
+
+        $reunions = $query->orderBy('date_debut', 'desc')->get();
+
+        if ($format === 'excel') {
+            return $this->exportToExcel($reunions);
+        }
+
+        try {
+            if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+                $title = "Rapport Global des Réunions";
+                if ($orgId) {
+                    $org = Organisation::find($orgId);
+                    if ($org) { $title .= " - " . $org->nom; }
+                }
+
+                $data = [
+                    'reunions' => $reunions,
+                    'title' => $title,
+                    'date' => now()->format('d/m/Y H:i')
+                ];
+                
+                $pdf = Pdf::loadView('exports.reunions_pdf', $data);
+                
+                $filename = "reunions_export_" . now()->format('Ymd_His') . ".pdf";
+                
+                return response()->streamDownload(function () use ($pdf) {
+                    echo $pdf->output();
+                }, $filename, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => "attachment; filename=\"$filename\"",
+                    'Cache-Control' => 'no-cache, must-revalidate',
+                    'Pragma' => 'no-cache',
+                    'Expires' => '0',
+                    'X-Content-Type-Options' => 'nosniff'
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error("PDF Export failed: " . $e->getMessage());
+        }
+
+        // Fallback to print-friendly HTML
+        return view('exports.reunions_pdf', [
+            'reunions' => $reunions,
+            'title' => "Rapport Global des Réunions",
+            'date' => now()->format('d/m/Y H:i'),
+            'print' => true
+        ]);
+    }
+
+    protected function exportToExcel($reunions)
+    {
+        $filename = "reunions_export_" . now()->format('Ymd_His') . ".csv";
+        $headers = [
+            "Content-type"        => "text/csv; charset=UTF-8",
+            "Content-Disposition" => "attachment; filename=$filename",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
+        ];
+
+        $columns = [
+            'Objet', 
+            'Description', 
+            'Date Début', 
+            'Date Fin', 
+            'Lieu', 
+            'Type de Réunion', 
+            'Statut', 
+            'Nombre de Participants',
+            'Organisation'
+        ];
+
+        $callback = function() use($reunions, $columns) {
+            $file = fopen('php://output', 'w');
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF)); // UTF-8 BOM for Excel compatibility
+            
+            // Write headers
+            fputcsv($file, $columns, ',');
+
+            foreach ($reunions as $reunion) {
+                fputcsv($file, [
+                    $reunion->objet,
+                    $reunion->description ?: 'N/A',
+                    $reunion->date_debut->format('d/m/Y H:i'),
+                    $reunion->date_fin->format('d/m/Y H:i'),
+                    $reunion->lieu ?: 'N/A',
+                    ucfirst($reunion->type),
+                    strtoupper(str_replace('_', ' ', $reunion->statut)),
+                    $reunion->invitations->count(),
+                    $reunion->organisation->nom ?? 'N/A'
+                ], ',');
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+
     /**
      * Fetch reunions for calendar (JSON)
      */
     public function list(Request $request)
     {
+        $this->authorize('viewAny', Reunion::class);
+
         $start = Carbon::parse($request->start);
         $end = Carbon::parse($request->end);
 
@@ -38,7 +210,7 @@ class ReunionController extends Controller
                     $firstOrg = $user->chefOfOrganisations()->first() ?? $user->memberOfOrganisations()->first();
                     if ($firstOrg) {
                         $activeOrgId = $firstOrg->id;
-                        session(['active_organisation_id' => $activeOrgId]);
+                        session(['active_organisation_id' => $activeOrgId]); 
                     }
                 }
 
@@ -57,8 +229,8 @@ class ReunionController extends Controller
             }
         }
 
-        $reunions = $reunionsQuery->get()
-            ->map(function ($reunion) {
+        $reunions = $reunionsQuery->with('invitations')->get()
+            ->map(function ($reunion) use ($user) {
                 return [
                     'id' => $reunion->id,
                     'title' => $reunion->objet,
@@ -67,26 +239,21 @@ class ReunionController extends Controller
                     'status' => $reunion->statut, // for color coding
                     'type' => $reunion->type,
                     'description' => $reunion->description,
+                    'ordre_du_jour' => $reunion->ordre_du_jour,
                     'lieu' => $reunion->lieu,
+                    'organisation_id' => $reunion->organisation_id, // Useful for frontend info
+                    'participants' => $reunion->invitations->pluck('email')->toArray(),
+                    'can_edit' => $user->can('update', $reunion),
+                    'can_delete' => $user->can('delete', $reunion),
                 ];
             });
 
         return response()->json($reunions);
     }
-    /*
- public function organisations()
-    {
-        return response()->json(
-            \Illuminate\Support\Facades\Cache::remember('organisations_all', 3600, function () {
-                return Organisation::all(['id', 'nom']);
-            })
-        );
-    }
-        */
-/*
+
     public function getOptions()
     {
-        return response()->json([
+        $options = [
             'types' => [
                 ['id' => 'presentiel', 'label' => 'Présentiel'],
                 ['id' => 'visio', 'label' => 'Visio'],
@@ -99,85 +266,57 @@ class ReunionController extends Controller
                 ['id' => 'terminee', 'label' => 'Terminée'],
                 ['id' => 'annulee', 'label' => 'Annulée']
             ]
-        ]);
+        ];
+
+        // If admin, send organisations list
+        $user = auth()->user();
+        if ($user && $user->isAdmin()) {
+            $options['organisations'] = Organisation::select('id', 'nom', 'code')->orderBy('nom')->get();
+        }
+
+        return response()->json($options);
     }
-*/
 
-    public function store(Request $request)
+    public function store(StoreReunionRequest $request)
     {
-        $request->validate([
-            'objet' => 'required|string|max:200',
-            'date_debut' => 'required|date',
-            'date_fin' => 'required|date|after:date_debut',
-            'statut' => 'required|in:brouillon,planifiee,en_cours,terminee,annulee',
-            'type' => 'required|in:presentiel,visio,hybride',
-            'participants' => 'nullable|array',
-            'participants.*' => 'email',
-        ]);
-
+        // Validation and Authorization handled by Request and Policy
+        
         try {
-            $user = auth()->user();
-            $userRole = $user->getAttributes()['role'] ?? 'membre';
-            $isAdmin =  $user->role_id == 1;
+            $data = $request->validated();
+            
+            // Unset participants from data to save Reunion model (they are saved separately)
+            $participants = $data['participants'] ?? [];
+            unset($data['participants']);
 
-            // Restriction: Seuls l'Admin et le Chef peuvent ajouter des réunions
-            if (!$isAdmin && $userRole === 'membre') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Les membres ne sont pas autorisés à créer des réunions.'
-                ], 403);
-                //permission 
-            }
-
-            $dateDebut = Carbon::parse($request->date_debut);
-
-            // Restriction: Le chef ne peut pas ajouter une réunion pour une date passée
-            if ($userRole === 'chef_organisation' && !$isAdmin && $dateDebut->isPast()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Un Chef ne peut pas créer de réunion dans le passé.'
-                ], 422);
-                //correcte donne mais ne peut pas le traiter 
-            }
-
-            // Convert empty strings to null
-            $data = $request->only([ 'description', 'lieu', 'type', 'statut']);
-            foreach ($data as $key => $value) {
-                if ($value === '') {
-                    $data[$key] = null;
-                }
-            }
-
-            // Fallback for organisation_id test 
-            $orgId = $request->organisation_id;
-            if (!$orgId) {
-              
-                     return response()->json([
-                        'success' => false, 
-                        'message' => 'Aucune organisation trouvée.'
-                    ], 422);
-                }
-            $data['organisation_id'] = $orgId;
-
+            // organisation_id is already in $data from StoreReunionRequest validation logic (merged)
+            
             $reunion = Reunion::create($data);
+
             // Gestion des participants
-            if ($request->has('participants')) {
-                foreach ($request->participants as $email) {
-                    $participant = User::where('email', $email)->first();
-                    
-                    Invitation::create([
-                        'reunion_id' => $reunion->id,
-                        'participant_id' => $participant ? $participant->id : null,
-                        'email' => $email,
-                        'statut' => 'en_attente',
-                    ]);}
-                   $this->notifyParticipants($reunion,'created');
-                }
-            return response()->json(['success' => true, 'message' => 'Réunion créée (certaines notifications par email peuvent avoir échoué si le serveur est indisponible)', 'data' => $reunion]);
+            foreach ($participants as $email) {
+                $participant = User::where('email', $email)->first();
+                
+                Invitation::create([
+                    'reunion_id' => $reunion->id,
+                    'participant_id' => $participant ? $participant->id : null,
+                    'email' => $email,
+                    'statut' => 'en_attente',
+                ]);
+            }
+            
+            $this->notifyParticipants($reunion, 'created');
+            
+            return response()->json([
+                'success' => true, 
+                'message' => 'Réunion créée avec succès', 
+                'data' => $reunion
+            ]);
+
         } catch (\Exception $e) {
+            Log::error('Erreur création réunion: ' . $e->getMessage());
             return response()->json([
                 'success' => false, 
-                'message' => 'Erreur: ' . $e->getMessage()
+                'message' => 'Erreur serveur: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -202,50 +341,56 @@ class ReunionController extends Controller
     {
         $notification = auth()->user()->notifications()->findOrFail($id);
         if ($notification->read_at) {
-        return response()->json(['message' => 'Already read'], 200);
-    }
-            $notification->markAsRead();
+            return response()->json(['message' => 'Already read'], 200);
+        }
+        $notification->markAsRead();
         return response()->json(['success' => true]);
     }
 
     /**
-     * Update an existing reunion
+     * Show the form for editing the specified reunion (returns JSON for AJAX).
      */
-    public function update(Request $request, $id)
+    public function edit(Reunion $reunion)
     {
-        $request->validate([
-            'objet' => 'required|string|max:200',
-            'date_debut' => 'required|date',
-            'date_fin' => 'nullable|date|after:date_debut',
-            'statut' => 'required|in:brouillon,planifiee,en_cours,terminee,annulee',
-            'type' => 'required|in:presentiel,visio,hybride',
-        ]);
+        $this->authorize('view', $reunion);
+        
+        // Load relationships needed for the form
+        $reunion->load(['invitations', 'organisation']);
+        
+        return response()->json($reunion);
+    }
 
+    /**
+     * Update an existing reunion
+     * Route Model Binding provides $reunion
+     */
+    public function update(UpdateReunionRequest $request, Reunion $reunion)
+    {
+        // Auth/Validation passed
         try {
-            $reunion = Reunion::findOrFail($id);
-            $user = auth()->user();
-            $isAdmin = $user->role_id == 1;
-
-            // Authorization: Only admin or chef of the organisation can edit
-            if (!$isAdmin && !$user->isChefIn($reunion->organisation_id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Non autorisé à modifier cette réunion.'
-                ], 403);
-            }
-
-           
-            // Update the reunion
-            $data = $request->only(['objet', 'description', 'date_debut', 'date_fin', 'lieu', 'type', 'statut']);
-            foreach ($data as $key => $value) {
-                if ($value === '') {
-                    $data[$key] = $reunion->$key;
-                }
-            }
+            $data = $request->validated();
+            
+            $participants = $data['participants'] ?? [];
+            unset($data['participants']);
+            
             $reunion->update($data);
-            $reunion->refresh();
 
-            // Notify participants about the update
+            // Sync participants
+            // Remove existing ones
+            $reunion->invitations()->delete();
+            
+            // Add new ones
+            foreach ($participants as $email) {
+                $participant = User::where('email', $email)->first();
+                Invitation::create([
+                    'reunion_id' => $reunion->id,
+                    'participant_id' => $participant ? $participant->id : null,
+                    'email' => $email,
+                    'statut' => 'en_attente',
+                ]);
+            }
+
+            $reunion->refresh();
             $this->notifyParticipants($reunion, 'updated');
 
             return response()->json(['success' => true, 'message' => 'Réunion mise à jour', 'data' => $reunion]);
@@ -256,24 +401,13 @@ class ReunionController extends Controller
             ], 500);
         }
     }
+
     /**
      * Delete a reunion
      */
-    public function destroy($id)
+    public function destroy(Reunion $reunion)
     {
         try {
-            $reunion = Reunion::findOrFail($id);
-            $user = auth()->user();
-            $isAdmin = $user->role_id == 1;
-
-            // Authorization: Only admin or chef of the organisation can delete
-            if (!$isAdmin && !$user->isChefIn($reunion->organisation_id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Non autorisé à supprimer cette réunion.'
-                ], 403);
-            }
-
             // Notify participants before deletion
             $this->notifyParticipants($reunion, 'deleted');
 
@@ -302,7 +436,9 @@ class ReunionController extends Controller
             $currentUserId = auth()->id();
 
             // Notify all invited participants
+            // Eager load invitations if possible, but lazy load fine here
             foreach ($reunion->invitations as $invitation) {
+                // If invite has user ID attached
                 if ($invitation->participant_id && $invitation->participant_id !== $currentUserId) {
                     if (!in_array($invitation->participant_id, $notifiedUserIds)) {
                         $participant = User::find($invitation->participant_id);

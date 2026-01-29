@@ -23,11 +23,6 @@ Route::get('/', function () {
     return redirect('/admin/login');
 });
 
-Route::middleware(['auth'])->group(function () {
-    Route::get('/reunion', function () {
-        return view('welcome');
-    })->name('reunion');
-});
 Route::get('/logout', function () {
     Auth::logout();
     return redirect('/admin/login');
@@ -38,24 +33,35 @@ Route::group(['prefix' => 'admin'], function () {
     Voyager::routes();
 });
 
-Route::controller(ReunionController::class)->group(function () {
-    Route::get('/reunions/list', 'list')->name('reunions.list');
-    Route::post('/reunions','store')->name('reunions.store');
-    Route::put('/reunions/{id}', 'update')->name('reunions.update');
-    Route::delete('/reunions/{id}', 'destroy')->name('reunions.destroy');
-    Route::get('/notifications',  'getNotifications')->name('notifications.index');
-    Route::post('/notifications/{id}/read','markNotificationAsRead')->name('notifications.read');
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/reunion', function () {
+        return view('welcome');
+    })->name('reunion');
+
+    Route::controller(ReunionController::class)->group(function () {
+        Route::get('/reunions/list', 'list')->name('reunions.list');
+        Route::get('/reunions/export', 'export')->name('reunions.export');
+        Route::get('/reunion-options', 'getOptions')->name('reunions.options');
+        Route::post('/reunions', 'store')->middleware('throttle:60,1')->name('reunions.store');
+        Route::get('/reunions/{reunion}/edit', 'edit')->name('reunions.edit');
+        Route::put('/reunions/{reunion}', 'update')->name('reunions.update');
+        Route::delete('/reunions/{reunion}', 'destroy')->name('reunions.destroy');
+        Route::get('/notifications',  'getNotifications')->name('notifications.index');
+        Route::post('/notifications/{id}/read','markNotificationAsRead')->name('notifications.read');
+    });
+
+    Route::controller(OrganisationController::class)->group(function () {
+        Route::get('/organisations', 'index')->name('organisations.list');
+        Route::get('/organisations/my', 'myOrganisation')->name('organisations.my');
+        Route::post('/organisations/switch', 'switch')->name('organisations.switch');
+        Route::get('/organisations/{organisation}', 'show')->name('organisations.show');
+        Route::post('/organisations/{organisation}', 'update')->name('organisations.update');
+        Route::post('/organisations/{organisation}/members', 'addMember')->name('organisations.members.add');
+        Route::post('/organisations/{organisation}/members/{user}', 'updateMember')->name('organisations.members.update');
+        Route::delete('/organisations/{organisation}/members/{user}', 'removeMember')->name('organisations.members.remove');
+    });
 });
 
-Route::controller(OrganisationController::class)->group(function () {
-    Route::get('/organisations', 'index')->name('organisations.list');
-    Route::get('/organisations/my', 'myOrganisation')->name('organisations.my');
-    Route::post('/organisations/switch', 'switch')->name('organisations.switch');
-    Route::get('/organisations/{organisation}', 'show')->name('organisations.show');
-    Route::post('/organisations/{organisation}', 'update')->name('organisations.update');
-    Route::post('/organisations/{organisation}/members', 'addMember')->name('organisations.members.add');
-    Route::post('/organisations/{organisation}/members/{user}', 'updateMember')->name('organisations.members.update');
-    Route::delete('/organisations/{organisation}/members/{user}', 'removeMember')->name('organisations.members.remove');
-});
 
 
