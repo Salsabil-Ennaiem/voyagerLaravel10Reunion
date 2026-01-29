@@ -23,6 +23,11 @@
                 <p class="text-gray-500 font-medium mt-1">Les organisations et leurs gérants.</p>
             </div>
             <div class="flex items-center gap-3">
+                @can('create', App\Models\Organisation::class)
+                    <a href="{{ route('organisations.create') }}" class="px-4 py-2 bg-indigo-600 text-white rounded-full text-sm font-bold hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                        <i class="fas fa-plus"></i> Nouvelle Organisation
+                    </a>
+                @endcan
                  <span class="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-full text-sm font-bold border border-indigo-100 italic">
                     {{ $organisations->count() }} au total
                 </span>
@@ -31,7 +36,7 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             @foreach($organisations as $org)
-            <div class="glass rounded-[2rem] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col group border-white/40">
+            <div class="glass rounded-[2rem] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 card-hover flex flex-col group border-white/40 {{ !$org->active ? 'opacity-60' : '' }}">
                 <a href="{{ route('organisations.show', $org->id) }}">
     
             <!-- Org Image / Mock Header -->
@@ -39,6 +44,11 @@
                     <div class="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors"></div>
                     @if($org->image)
                         <img src="{{ str_starts_with($org->image, 'http') ? $org->image : asset('storage/' . $org->image) }}" class="w-full h-full object-cover opacity-60">
+                    @endif
+                    @if(!$org->active)
+                        <div class="absolute top-3 right-3 px-2 py-1 bg-red-500/90 text-white text-[10px] font-bold rounded-lg uppercase">
+                            <i class="fas fa-ban mr-1"></i> Inactive
+                        </div>
                     @endif
                 </div>
 
@@ -55,9 +65,11 @@
                         </div>
                         
                         <div class="mt-12 flex flex-col gap-2 items-end">
-                            @if(Auth::user()->isChefIn($org->id))
+                            @if(Auth::user()->isAdmin())
+                                <span class="px-2 py-1 bg-yellow-100 text-yellow-700 text-[10px] font-bold rounded-lg border border-yellow-200 uppercase">Admin</span>
+                            @elseif(Auth::user()->isChefOf($org->id))
                                 <span class="px-2 py-1 bg-purple-100 text-purple-700 text-[10px] font-bold rounded-lg border border-purple-200 uppercase">Chef</span>
-                            @elseif ((!Auth::user()->isAdmin())&&(!Auth::user()->isChefIn($org->id)))
+                            @else
                                 <span class="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-lg border border-blue-200 uppercase">Membre</span>
                             @endif
 
@@ -76,7 +88,7 @@
                     </div>
 
                     <div class="flex flex-col gap-2">
-                        @if((session('active_organisation_id') != $org->id)&& (!Auth::user()->isAdmin()))
+                      {{--   @if((session('active_organisation_id') != $org->id)&& (!Auth::user()->isAdmin()))
                             <form action="{{ route('organisations.switch') }}" method="POST">
                                 @csrf
                                 <input type="hidden" name="organisation_id" value="{{ $org->id }}">
@@ -84,7 +96,7 @@
                                     Choisir cette organisation
                                 </button>
                             </form>
-                        @endif
+                        @endif --}}
                         <a href="{{ route('organisations.show', $org->id) }}" class="block w-full py-2.5 bg-white border border-gray-200 text-gray-700 font-bold text-center rounded-2xl hover:bg-gray-200 transition-all text-sm">
                             Voir les détails
                         </a>

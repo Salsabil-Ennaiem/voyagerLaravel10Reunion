@@ -59,35 +59,4 @@ class Reunion extends Model
         return $this->hasMany(Invitation::class);
     }
 
-    //  scopes
-    public function scopePlanifiees($query)
-    {
-        return $query->where('statut', 'planifiee');
-    }
-
-    public function scopeEnCours($query)
-    {
-        return $query->where('statut', 'en_cours');
-    }
-
-    public function scopeTerminees($query)
-    {
-        return $query->where('statut', 'terminee');
-    }
-
-    public function scopeBrouillons($query)
-    {
-        return $query->where('statut', 'brouillon');
-    }
-
-
-
-    public function getDurationInMinutesAttribute(): ?int
-    {
-        if (!$this->date_fin) {
-            return null;
-        }
-
-        return $this->date_debut->diffInMinutes($this->date_fin);
-    }
 }

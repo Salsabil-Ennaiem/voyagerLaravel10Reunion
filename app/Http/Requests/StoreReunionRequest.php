@@ -77,6 +77,29 @@ class StoreReunionRequest extends FormRequest
                        );
                    }
                 }
+
+                // Validation: date_debut and date_fin must be on the same day
+                if ($this->date_debut && $this->date_fin) {
+                    $start = Carbon::parse($this->date_debut);
+                    $end = Carbon::parse($this->date_fin);
+                    
+                    if (!$start->isSameDay($end)) {
+                        $validator->errors()->add(
+                            'date_fin',
+                            'La date de fin doit être le même jour que la date de début.'
+                        );
+                    }
+                }
+
+                // Authorization: User must have rights on the organisation
+                if ($this->organisation_id) {
+                    if (!$isAdmin && !$user->isChefOf((int) $this->organisation_id)) {
+                        $validator->errors()->add(
+                            'organisation_id',
+                            'Vous n\'avez pas les droits pour créer une réunion dans cette organisation.'
+                        );
+                    }
+                }
             }
         ];
     }

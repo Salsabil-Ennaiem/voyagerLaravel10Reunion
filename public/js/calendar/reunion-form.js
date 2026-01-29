@@ -140,14 +140,50 @@ class ReunionForm {
     }
 
     validateDates() {
+        const startEl = document.getElementById('formData.date_debut');
+        const endEl = document.getElementById('formData.date_fin');
+
         if (this.formData.date_debut && this.formData.date_fin) {
-            this.errorDate = new Date(this.formData.date_fin) <= new Date(this.formData.date_debut);
+            const start = new Date(this.formData.date_debut);
+            const end = new Date(this.formData.date_fin);
+
+            // Check if end is before or equal to start
+            this.errorDate = end <= start;
+
+            // Check if same day
+            const sameDay = start.toDateString() === end.toDateString();
+            this.sameDayError = !sameDay;
+
+            // If different days, auto-correct date_fin to same day as date_debut
+            if (!sameDay && endEl) {
+                // Keep the time but change the date to match date_debut
+                const correctedEnd = new Date(start);
+                correctedEnd.setHours(end.getHours(), end.getMinutes());
+
+                // If corrected end is still before start, add 1 hour to start
+                if (correctedEnd <= start) {
+                    correctedEnd.setTime(start.getTime() + 3600000); // +1 hour
+                }
+
+                this.formData.date_fin = correctedEnd.toISOString().slice(0, 16);
+                endEl.value = this.formData.date_fin;
+                this.sameDayError = false;
+            }
         } else {
             this.errorDate = false;
+            this.sameDayError = false;
         }
 
         if (this.els.dateError) {
-            this.els.dateError.style.display = this.errorDate ? 'block' : 'none';
+            if (this.errorDate) {
+                this.els.dateError.textContent = 'La date de fin doit être après le début.';
+                this.els.dateError.style.display = 'block';
+            } else if (this.sameDayError) {
+                this.els.dateError.textContent = 'Les dates doivent être le même jour.';
+                this.els.dateError.style.display = 'block';
+            } else {
+                this.els.dateError.style.display = 'none';
+            }
         }
     }
 
@@ -250,8 +286,8 @@ class ReunionForm {
     }
 
     async submit() {
-        if (this.errorDate) {
-            alert('Veuillez corriger la date de fin.');
+        if (this.errorDate || this.sameDayError) {
+            alert('Veuillez corriger les dates. La fin doit être après le début et le même jour.');
             return;
         }
 

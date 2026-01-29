@@ -3,16 +3,29 @@
 namespace App\Http\Controllers;
 
 use App\Models\Organisation;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
 class OrganisationController extends Controller
 {
+    public function __construct()
+    {
+        // Apply auth middleware to all methods
+        $this->middleware('auth');
+    }
+
+    /**
+     * Display a listing of organisations.
+     * All users can view organisations they have access to.
+     */
     public function index()
     {
         $user = Auth::user();
         
+        // Admin can see all organisations
         if ($user->isAdmin()) {
             $organisations = Organisation::with('chef')->get();
             return view('organisations.index', compact('organisations'));
@@ -27,70 +40,84 @@ class OrganisationController extends Controller
         return view('organisations.index', compact('organisations'));
     }
 
+    /**
+     * Show the form for creating a new organisation.
+     * Only Admin can access this.
+     */
+    public function create()
+    {
+        $this->authorize('create', Organisation::class);
+        
+        $users = User::where('actif', true)->get();
+        return view('organisations.create', compact('users'));
+    }
+
+    /**
+     * Store a newly created organisation.
+     * Only Admin can create organisations.
+     */
+    public function store(Request $request)
+    {
+        $this->authorize('create', Organisation::class);
+
+        $request->validate([
+            'nom' => 'required|string|max:150',
+            'email_contact' => 'nullable|email|max:255',
+            'adresse' => 'nullable|string|max:500',
+            'description' => 'nullable|string',
+            'chef_organisation_id' => 'nullable|exists:users,id',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'active' => 'nullable|boolean',
+        ]);
+
+        $data = $request->only(['nom', 'email_contact', 'adresse', 'description', 'chef_organisation_id']);
+        $data['active'] = $request->has('active') ? $request->active : true;
+
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('organisations', 'public');
+            $data['image'] = $path;
+        }
+
+        $organisation = Organisation::create($data);
+
+        return redirect()
+            ->route('organisations.show', $organisation)
+            ->with('success', 'Organisation créée avec succès.');
+    }
+
+    /**
+     * Display the specified organisation.
+     * Admin, Chef, or Members can view.
+     */
     public function show(Organisation $organisation)
     {
-        $user = Auth::user();
-        $isChef = $user->isAdmin() || $organisation->chef_organisation_id === $user->id;
-        $isMember = $user->isMemberIn($organisation->id);
+        $this->authorize('view', $organisation);
 
-        if (!$isChef && !$isMember) {
-            abort(403);
-        }
+        $user = Auth::user();
+        $isAdmin = $user->isAdmin();
+        $isChef = $user->isChefOf($organisation->id);
+        $canManageMembers = $isAdmin || $isChef;
 
         $organisation->load('chef', 'members');
 
         $allUsers = [];
-        if ($isChef) {
-            $allUsers = \App\Models\User::where('actif', true)->get();
+        if ($canManageMembers) {
+            $allUsers = User::where('actif', true)->get();
         }
 
-        return view('organisations.show', compact('organisation', 'isChef', 'allUsers'));
+        return view('organisations.show', compact('organisation', 'isAdmin', 'isChef', 'canManageMembers', 'allUsers'));
     }
 
-    public function switch(Request $request)
-    {
-        $request->validate(['organisation_id' => 'required|exists:organisations,id']);
-        $orgId = $request->organisation_id;
-        $user = Auth::user();
-
-        // Check if user has access
-        $hasAccess = $user->isAdmin() || $user->isChefIn($orgId) || $user->isMemberIn($orgId);
-        
-        if (!$hasAccess) {
-            return back()->with('error', 'Vous n\'avez pas accès à cette organisation.');
-        }
-
-        session(['active_organisation_id' => $orgId]);
-
-        return back()->with('success', 'Organisation choisie : ' . Organisation::find($orgId)->nom);
-    }
-
-    public function myOrganisation()
-    {
-        $user = Auth::user();
-        $activeId = $user->getActiveOrganisationId();
-        
-        if ($activeId) {
-            return redirect()->route('organisations.show', $activeId);
-        }
-
-        $organisation = $user->chefOfOrganisations()->first() ?? $user->memberOfOrganisations()->first();
-
-        if (!$organisation) {
-                abort(404, "Aucune organisation trouvée.");
-        }
-
-        return redirect()->route('organisations.show', $organisation->id);
-    }
-
+    /**
+     * Update the specified organisation.
+     * Admin can update any organisation.
+     * Chef can only update their own organisation.
+     */
     public function update(Request $request, Organisation $organisation)
     {
-        $user = Auth::user();
+        $this->authorize('update', $organisation);
 
-        // Security check: Only Admins or the actual Chef can update
-        if (!$user->isAdmin() && $organisation->chef_organisation_id !== $user->id) {
-            abort(403, "Seul le Chef peut modifier les informations.");
-        }
+        $user = Auth::user();
 
         $rules = [
             'nom' => 'required|string|max:255',
@@ -100,6 +127,7 @@ class OrganisationController extends Controller
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ];
 
+        // Only Admin can change the chef
         if ($user->isAdmin()) {
             $rules['chef_organisation_id'] = 'nullable|exists:users,id';
         }
@@ -108,6 +136,7 @@ class OrganisationController extends Controller
 
         $data = $request->only(['nom', 'email_contact', 'adresse', 'description']);
 
+        // Only Admin can update the chef
         if ($user->isAdmin() && $request->has('chef_organisation_id')) {
             $data['chef_organisation_id'] = $request->chef_organisation_id;
         }
@@ -126,19 +155,84 @@ class OrganisationController extends Controller
         return back()->with('success', 'Organisation mise à jour avec succès.');
     }
 
+    /**
+     * Toggle the active status of the organisation.
+     * Only Admin can activate/deactivate.
+     */
+    public function toggleActive(Organisation $organisation)
+    {
+        $this->authorize('toggleActive', $organisation);
+
+        $organisation->update([
+            'active' => !$organisation->active
+        ]);
+
+        $status = $organisation->active ? 'activée' : 'désactivée';
+        return back()->with('success', "Organisation {$status} avec succès.");
+    }
+
+    /**
+     * Remove the specified organisation.
+     * Only Admin can delete organisations.
+     */
+    public function destroy(Organisation $organisation)
+    {
+        $this->authorize('delete', $organisation);
+
+        // Delete the image if exists
+        if ($organisation->image && !str_starts_with($organisation->image, 'http')) {
+            Storage::disk('public')->delete($organisation->image);
+        }
+
+        $organisation->delete();
+
+        return redirect()
+            ->route('organisations.index')
+            ->with('success', 'Organisation supprimée avec succès.');
+    }
+
+    /**
+     * Redirect to the user's active/default organisation.
+     */
+    public function myOrganisation()
+    {
+        $user = Auth::user();
+        
+        // Check session for active organisation
+        $activeId = session('active_organisation_id');
+        
+        if ($activeId) {
+            $organisation = Organisation::find($activeId);
+            if ($organisation && $user->can('view', $organisation)) {
+                return redirect()->route('organisations.show', $activeId);
+            }
+        }
+
+        // Find the first organisation the user has access to
+        $organisation = $user->chefOfOrganisations()->first() 
+            ?? $user->memberOfOrganisations()->first();
+
+        if (!$organisation) {
+            abort(404, "Aucune organisation trouvée.");
+        }
+
+        return redirect()->route('organisations.show', $organisation->id);
+    }
+
+    /**
+     * Add a member to the organisation.
+     * Only Admin or Chef can add members.
+     */
     public function addMember(Request $request, Organisation $organisation)
     {
-        $adminOrChef = Auth::user();
-        if (!$adminOrChef->isAdmin() && $organisation->chef_organisation_id !== $adminOrChef->id) {
-            abort(403);
-        }
+        $this->authorize('manageMembers', $organisation);
 
         $request->validate([
             'email' => 'required|email',
             'fonction' => 'nullable|string|max:255',
         ]);
 
-        $user = \App\Models\User::where('email', $request->email)->first();
+        $user = User::where('email', $request->email)->first();
         $wasCreated = false;
         
         if (!$user) {
@@ -146,13 +240,13 @@ class OrganisationController extends Controller
             $nameParts = explode('@', $request->email);
             $username = $nameParts[0];
 
-            $user = \App\Models\User::create([
+            $user = User::create([
                 'email' => $request->email,
                 'nom' => strtoupper($username),
                 'prenom' => ucfirst($username),
-                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'password' => Hash::make('password'),
                 'actif' => true,
-                'role_id' => 2,
+                'role_id' => 2, // Default user role
             ]);
         }
 
@@ -160,16 +254,20 @@ class OrganisationController extends Controller
             $user->id => ['fonction' => $request->fonction]
         ]);
 
-        $msg = $wasCreated ? "Utilisateur créé et ajouté comme membre." : "Membre ajouté avec succès.";
+        $msg = $wasCreated 
+            ? "Utilisateur créé et ajouté comme membre." 
+            : "Membre ajouté avec succès.";
+            
         return back()->with('success', $msg);
     }
 
-    public function updateMember(Request $request, Organisation $organisation, \App\Models\User $member)
+    /**
+     * Update a member's fonction in the organisation.
+     * Only Admin or Chef can update members.
+     */
+    public function updateMember(Request $request, Organisation $organisation, User $member)
     {
-        $user = Auth::user();
-        if (!$user->isAdmin() && $organisation->chef_organisation_id !== $user->id) {
-            abort(403);
-        }
+        $this->authorize('manageMembers', $organisation);
 
         $request->validate([
             'fonction' => 'nullable|string|max:255',
@@ -182,12 +280,13 @@ class OrganisationController extends Controller
         return back()->with('success', 'Membre mis à jour.');
     }
 
-    public function removeMember(Organisation $organisation, \App\Models\User $member)
+    /**
+     * Remove a member from the organisation.
+     * Only Admin or Chef can remove members.
+     */
+    public function removeMember(Organisation $organisation, User $member)
     {
-        $user = Auth::user();
-        if (!$user->isAdmin() && $organisation->chef_organisation_id !== $user->id) {
-            abort(403);
-        }
+        $this->authorize('manageMembers', $organisation);
 
         $organisation->members()->detach($member->id);
 

@@ -55,47 +55,79 @@ class User extends \TCG\Voyager\Models\User
         'remember_token',
     ];
 
-    public function chefOfOrganisations()
-    {
-        return $this->hasMany(Organisation::class, 'chef_organisation_id');
-    }
+public function chefOfOrganisations()
+{
+    return $this->hasMany(Organisation::class, 'chef_organisation_id');
+}
 
-    public function memberOfOrganisations()
-    {
-        return $this->belongsToMany(Organisation::class, 'membres', 'compte_id', 'organisation_id')
-                    ->withPivot('fonction', 'description');
-    }
+public function memberOfOrganisations()
+{
+    return $this->belongsToMany(Organisation::class, 'membres', 'compte_id', 'organisation_id')
+                ->withPivot('fonction', 'description');
+}
 
-    public function isChefIn(int $orgId)
-    {
-        return $this->chefOfOrganisations()->where('id', $orgId)->exists();
-    }
+// Check if user is chef of a specific org
+public function isChefOf(int $orgId)
+{
+    return $this->chefOfOrganisations()->where('id', $orgId)->exists();
+}
 
-    public function isMemberIn(int $orgId)
-    {
-        return $this->memberOfOrganisations()->where('organisation_id', $orgId)->exists();
-    }
+// Get organization-specific role
+public function getRoleInOrganisation(int $orgId)
+{
+    $membership = $this->memberOfOrganisations()
+        ->where('organisation_id', $orgId)
+        ->first();
+    
+    return $membership ? $membership->pivot->fonction : null;
+}
 
-    public function isChef()
-    {
-        // Global chef check (chef in at least one)
-        return $this->chefOfOrganisations()->exists();
-    }
+// Admin access (Voyager role)
+public function isAdmin()
+{
+    return $this->hasRole('admin');
+}
 
-    public function isAdmin()
-    {
-        return $this->hasRole('admin') || $this->role_id == 1;
-    }
+// Check if user is chef of ANY organisation
+public function isChef()
+{
+    return $this->chefOfOrganisations()->exists();
+}
+
+// Check if user is chef of a specific organisation (alias for isChefOf)
+public function isChefIn(int $orgId)
+{
+    return $this->isChefOf($orgId);
+}
+
+// Check if user is a member of a specific organisation
+public function isMemberOf(int $orgId)
+{
+    return $this->memberOfOrganisations()
+        ->where('organisation_id', $orgId)
+        ->exists();
+}
+
+// Alias for isMemberOf for consistency
+public function isMemberIn(int $orgId)
+{
+    return $this->isMemberOf($orgId);
+}
+
 
     public function invitations()
     {
         return $this->hasMany(Invitation::class, 'participant_id');
     }
 
+    /*
+
     public function getActiveOrganisationId()
     {
         return session('active_organisation_id');
     }
+        
+*/
 
     /**
      * The attributes that should be cast.

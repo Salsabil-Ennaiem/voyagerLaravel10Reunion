@@ -20,6 +20,7 @@ class Organisation extends Model
         'adresse',
         'chef_organisation_id',
         'image',
+        'active',
     ];
 
     /**
@@ -30,25 +31,44 @@ class Organisation extends Model
     protected $casts = [
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'active' => 'boolean',
     ];
 
-    public function chef(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'chef_organisation_id');
-    }
+  public function chef()
+{
+    return $this->belongsTo(User::class, 'chef_organisation_id');
+}
+
+public function members()
+{
+    return $this->belongsToMany(User::class, 'membres', 'organisation_id', 'compte_id')
+                ->withPivot('fonction', 'description');
+}
+
+// Get members by role
+public function getMembersByRole(string $role)
+{
+    return $this->members()->wherePivot('fonction', $role)->get();
+}
+
+// Get all members with their roles
+public function getMembersWithRoles()
+{
+    return $this->members()->get()->map(function($member) {
+        return [
+            'user' => $member,
+            'fonction' => $member->pivot->fonction,
+            'description' => $member->pivot->description,
+        ];
+    });
+}
+
 
     public function reunions(): HasMany
     {
         return $this->hasMany(Reunion::class);
     }
-
-    public function members()
-    {
-        return $this->belongsToMany(User::class, 'membres', 'organisation_id', 'compte_id')
-                    ->withPivot('fonction', 'description');
-    }
-
-
+/*
     public function activeOrganisation()
     {
         return $this->members()
@@ -61,16 +81,5 @@ class Organisation extends Model
         return $this->activeOrganisation()?->id;
     }
 
-    /**
-     * Get the full path to the organisation image (if stored in storage)
-     */
-    public function getImageUrlAttribute(): ?string
-    {
-        if (!$this->image) {
-            return null;
-        }
- return $this->image; // ← most common when storing full URL
-        // Adjust according to your storage setup
-        // return asset('storage/organisations/' . $this->image);
-    }
+    */
 }

@@ -14,9 +14,8 @@ return new class extends Migration
             $table->string('nom', 100);
             $table->string('prenom', 100)->nullable();
             $table->string('telephone', 20)->nullable();
-            $table->enum('role', ['admin', 'chef_organisation', 'membre'])->nullable();
             $table->boolean('actif')->default(true);
-            $table->string('image')->nullable();           // chemin ou nom du fichier
+            $table->string('image')->nullable();           
         });
     }
 
@@ -28,7 +27,6 @@ return new class extends Migration
                 'nom',
                 'prenom',
                 'telephone',
-                'role',
                 'actif',
                 'image',
             ]);

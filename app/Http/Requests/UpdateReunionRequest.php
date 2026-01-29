@@ -3,6 +3,8 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
+use Carbon\Carbon;
 
 class UpdateReunionRequest extends FormRequest
 {
@@ -41,4 +43,28 @@ class UpdateReunionRequest extends FormRequest
             'lieu' => $this->lieu ?: null,
         ]);
     }
+
+    /**
+     * Get the "after" validation callables for the request.
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator) {
+                // Validation: date_debut and date_fin must be on the same day
+                if ($this->date_debut && $this->date_fin) {
+                    $start = Carbon::parse($this->date_debut);
+                    $end = Carbon::parse($this->date_fin);
+                    
+                    if (!$start->isSameDay($end)) {
+                        $validator->errors()->add(
+                            'date_fin',
+                            'La date de fin doit être le même jour que la date de début.'
+                        );
+                    }
+                }
+            }
+        ];
+    }
 }
+

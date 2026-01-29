@@ -22,7 +22,6 @@ class ProjectDataSeeder extends Seeder
                 'prenom' => 'User',
                 'password' => Hash::make('password'),
                 'role_id' => 1, // Voyager Admin
-                'role' => 'admin',
                 'actif' => true,
             ]
         );
@@ -34,7 +33,6 @@ class ProjectDataSeeder extends Seeder
                 'prenom' => 'Technique',
                 'password' => Hash::make('password'),
                 'role_id' => 2, // Voyager User
-                'role' => 'chef_organisation',
                 'actif' => true,
             ]
         );
@@ -46,7 +44,6 @@ class ProjectDataSeeder extends Seeder
                 'prenom' => 'RH',
                 'password' => Hash::make('password'),
                 'role_id' => 2,
-                'role' => 'chef_organisation',
                 'actif' => true,
             ]
         );
@@ -58,7 +55,6 @@ class ProjectDataSeeder extends Seeder
                 'prenom' => 'Un',
                 'password' => Hash::make('password'),
                 'role_id' => 2,
-                'role' => 'membre',
                 'actif' => true,
             ]
         );

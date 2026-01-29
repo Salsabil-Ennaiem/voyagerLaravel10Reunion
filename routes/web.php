@@ -52,11 +52,16 @@ Route::middleware(['auth'])->group(function () {
     });
 
     Route::controller(OrganisationController::class)->group(function () {
-        Route::get('/organisations', 'index')->name('organisations.list');
+        Route::get('/organisations', 'index')->name('organisations.index');
+        Route::get('/organisations/list', 'index')->name('organisations.list'); // Alias for backwards compatibility
         Route::get('/organisations/my', 'myOrganisation')->name('organisations.my');
-        Route::post('/organisations/switch', 'switch')->name('organisations.switch');
+        //Route::post('/organisations/switch', 'switch')->name('organisations.switch');
+        Route::get('/organisations/create', 'create')->name('organisations.create');
+        Route::post('/organisations', 'store')->name('organisations.store');
         Route::get('/organisations/{organisation}', 'show')->name('organisations.show');
         Route::post('/organisations/{organisation}', 'update')->name('organisations.update');
+        Route::patch('/organisations/{organisation}/toggle-active', 'toggleActive')->name('organisations.toggleActive');
+        Route::delete('/organisations/{organisation}', 'destroy')->name('organisations.destroy');
         Route::post('/organisations/{organisation}/members', 'addMember')->name('organisations.members.add');
         Route::post('/organisations/{organisation}/members/{user}', 'updateMember')->name('organisations.members.update');
         Route::delete('/organisations/{organisation}/members/{user}', 'removeMember')->name('organisations.members.remove');

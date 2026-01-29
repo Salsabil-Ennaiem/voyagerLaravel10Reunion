@@ -80,21 +80,60 @@
                     <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Activités</h3>
                     <div class="flex items-center justify-between py-2 border-b border-gray-100">
                         <span class="text-sm text-gray-600">Réunions</span>
-                        <span class="font-bold text-indigo-600">{{ $organisation->reunions()->count() }}</span>
+                        <span class="font-bold text-indigo-600">{{ $organisation->reunions()->count() ?? 0 }}</span>
                     </div>
                     <div class="flex items-center justify-between py-2 border-b border-gray-100">
                         <span class="text-sm text-gray-600">Membres</span>
-                        <span class="font-bold text-indigo-600">{{ $organisation->members()->count() }}</span>
+                        <span class="font-bold text-indigo-600">{{ $organisation->members()->count() ?? 0 }}</span>
                     </div>
                 </div>
+
+            <!-- Admin Actions -->
+                @if($isAdmin)
+                <div class="glass rounded-3xl p-6 shadow-xl border-white/40 mb-6">
+                    <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Actions Admin</h3>
+                    <div class="flex flex-wrap gap-3">
+                        <!-- Toggle Active Status -->
+                        <form action="{{ route('organisations.toggleActive', $organisation->id) }}" method="POST">
+                            @csrf
+                            @method('PATCH')
+                            @if($organisation->active)
+                                <button type="submit" class="px-4 py-2 bg-orange-100 text-orange-700 text-sm font-bold rounded-xl hover:bg-orange-200 transition flex items-center gap-2" onclick="return confirm('Désactiver cette organisation ?')">
+                                    <i class="fas fa-pause-circle"></i> Désactiver
+                                </button>
+                            @else
+                                <button type="submit" class="px-4 py-2 bg-green-100 text-green-700 text-sm font-bold rounded-xl hover:bg-green-200 transition flex items-center gap-2">
+                                    <i class="fas fa-play-circle"></i> Activer
+                                </button>
+                            @endif
+                        </form>
+
+                        <!-- Delete Organisation -->
+                        <form action="{{ route('organisations.destroy', $organisation->id) }}" method="POST">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="px-4 py-2 bg-red-100 text-red-700 text-sm font-bold rounded-xl hover:bg-red-200 transition flex items-center gap-2" onclick="return confirm('Êtes-vous sûr de vouloir supprimer cette organisation ? Cette action est irréversible.')">
+                                <i class="fas fa-trash-alt"></i> Supprimer
+                            </button>
+                        </form>
+                    </div>
+
+                    @if(!$organisation->active)
+                        <div class="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm flex items-center gap-2">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>Cette organisation est actuellement <strong>inactive</strong>.</span>
+                        </div>
+                    @endif
+                </div>
+                @endif
             </div>
 
             <!-- Main Content: Edit Form -->
             <div class="lg:col-span-2 space-y-8">
                 <div class="glass rounded-3xl p-8 shadow-xl border-white/40">
                     <div class="flex items-center justify-between mb-8">
-                        <h2 class="text-xl font-bold text-gray-900">{{ $isChef ? 'Éditer l\'Organisation' : 'Détails de l\'Organisation' }}</h2>
-                        <i class="fas {{ $isChef ? 'fa-edit' : 'fa-info-circle' }} text-indigo-500 text-xl"></i>
+                        <h2 class="text-xl font-bold text-gray-900">{{ ($isAdmin || $isChef) ? 'Éditer l\'Organisation' : 'Détails de l\'Organisation' }}</h2>
+                        <i class="fas {{ ($isAdmin || $isChef) ? 'fa-edit' : 'fa-info-circle' }} text-indigo-500 text-xl"></i>
                     </div>
 
                     <form action="{{ route('organisations.update', $organisation->id) }}" method="POST" enctype="multipart/form-data" class="space-y-6">
@@ -105,8 +144,8 @@
                                 <i class="fa-solid fa-building w-5 text-indigo-500"></i>
                                 <label for="nom" class="text-xs font-bold text-gray-500 uppercase ml-1">Nom de l'organisation</label>
                                 <input type="text" name="nom" id="nom" value="{{ old('nom', $organisation->nom) }}" 
-                                       {{ !$isChef ? 'readonly' : '' }}
-                                       class="w-full px-4 py-3 rounded-2xl {{ !$isChef ? 'bg-gray-50' : 'bg-white/50' }} border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
+                                       {{ (!$isAdmin && !$isChef) ? 'readonly' : '' }}
+                                       class="w-full px-4 py-3 rounded-2xl {{ (!$isAdmin && !$isChef) ? 'bg-gray-50' : 'bg-white/50' }} border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
                                 @error('nom') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                             </div>
 
@@ -114,8 +153,8 @@
                                 <i class="fas fa-envelope w-5 text-indigo-500"></i>
                                 <label for="email_contact" class="text-xs font-bold text-gray-500 uppercase ml-1">Email de contact</label>
                                 <input type="email" name="email_contact" id="email_contact" value="{{ old('email_contact', $organisation->email_contact) }}" 
-                                       {{ !$isChef ? 'readonly' : '' }}
-                                       class="w-full px-4 py-3 rounded-2xl {{ !$isChef ? 'bg-gray-50' : 'bg-white/50' }} border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
+                                       {{ (!$isAdmin && !$isChef) ? 'readonly' : '' }}
+                                       class="w-full px-4 py-3 rounded-2xl {{ (!$isAdmin && !$isChef) ? 'bg-gray-50' : 'bg-white/50' }} border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
                                 @error('email_contact') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                             </div>
                         </div>
@@ -141,20 +180,20 @@
                             <i class="fas fa-map-marker-alt w-5 mt-1 text-indigo-500"></i>
                             <label for="adresse" class="text-xs font-bold text-gray-500 uppercase ml-1">Adresse</label>
                             <input type="text" name="adresse" id="adresse" value="{{ old('adresse', $organisation->adresse) }}" 
-                                   {{ !$isChef ? 'readonly' : '' }}
-                                   class="w-full px-4 py-3 rounded-2xl {{ !$isChef ? 'bg-gray-50' : 'bg-white/50' }} border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
+                                   {{ (!$isAdmin && !$isChef) ? 'readonly' : '' }}
+                                   class="w-full px-4 py-3 rounded-2xl {{ (!$isAdmin && !$isChef) ? 'bg-gray-50' : 'bg-white/50' }} border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
                             @error('adresse') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                         </div>
 
                         <div class="space-y-2">
                             <label for="description" class="text-xs font-bold text-gray-500 uppercase ml-1">Description</label>
                             <textarea name="description" id="description" rows="4" 
-                                      {{ !$isChef ? 'readonly' : '' }}
-                                      class="w-full px-4 py-3 rounded-2xl {{ !$isChef ? 'bg-gray-50' : 'bg-white/50' }} border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium resize-none text-gray-700">{{ old('description', $organisation->description) }}</textarea>
+                                      {{ (!$isAdmin && !$isChef) ? 'readonly' : '' }}
+                                      class="w-full px-4 py-3 rounded-2xl {{ (!$isAdmin && !$isChef) ? 'bg-gray-50' : 'bg-white/50' }} border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium resize-none text-gray-700">{{ old('description', $organisation->description) }}</textarea>
                             @error('description') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                         </div>
 
-                        @if($isChef)
+                        @if($isAdmin || $isChef)
                         <div class="space-y-2">
                             <label class="text-xs font-bold text-gray-500 uppercase ml-1">Logo de l'organisation</label>
                             <div class="relative group cursor-pointer">
@@ -187,7 +226,7 @@
                 <div class="glass rounded-3xl p-8 shadow-xl border-white/40">
                     <div class="flex items-center justify-between mb-8">
                         <h2 class="text-xl font-bold text-gray-900">Membres</h2>
-                        @if($isChef)
+                        @if($canManageMembers)
                         <button onclick="document.getElementById('addMemberModal').classList.remove('hidden')" class="px-4 py-2 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-xl hover:bg-indigo-100 transition">
                             <i class="fas fa-plus mr-1"></i> Ajouter
                         </button>
@@ -204,7 +243,7 @@
                                     <p class="text-[10px] text-gray-500">{{ $member->pivot->fonction ?: 'Membre' }}</p>
                                 </div>
                             </div>
-                            @if($isChef)
+                            @if($canManageMembers)
                             <div class="flex items-center gap-2">
                                 <button onclick="openEditMember('{{ $member->id }}', '{{ $member->pivot->fonction }}')" class="p-2 text-indigo-400 hover:text-indigo-600 transition">
                                     <i class="fas fa-edit"></i>
@@ -228,7 +267,7 @@
         </div>
     </div>
 
-    @if($isChef)
+    @if($canManageMembers)
     <!-- Add Member Modal -->
     <div id="addMemberModal" class="fixed inset-0 z-[100] hidden">
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="this.parentElement.classList.add('hidden')"></div>
@@ -284,7 +323,7 @@
             </div>
         </div>
     </div>
-    @endif
+    @endif {{-- canManageMembers --}}
 
     <script>
         function previewImage(event) {
@@ -299,7 +338,7 @@
             }
         }
 
-        @if($isChef)
+        @if($canManageMembers)
         function openEditMember(memberId, currentFonction) {
             const modal = document.getElementById('editMemberModal');
             const form = document.getElementById('editMemberForm');

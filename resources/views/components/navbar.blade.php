@@ -121,7 +121,7 @@
                     </div>
                 </div>
 
-                <!-- Organization Switcher (Desktop Only) -->
+                 {{--     <!-- Organization Switcher (Desktop Only) -->
                 @auth
                 @php
                     $uOrgs = Auth::user()->chefOfOrganisations->merge(Auth::user()->memberOfOrganisations)->unique('id');
@@ -139,7 +139,7 @@
                         </span>
                         <svg class="w-3 h-3 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
-                    
+     
                     <div x-show="switcherOpen" x-transition 
                          class="absolute right-0 mt-2 w-56 bg-white shadow-2xl rounded-2xl border border-gray-100 py-2 z-50 overflow-hidden" 
                          style="display: none;">
@@ -165,9 +165,9 @@
                         @endforeach
                     </div>
                 </div>
-                @endif
+                 @endif 
                 @endauth
-
+--}}
                 <!-- Profile Dropdown (Desktop Only) -->
                 @auth
                 <div class="relative hidden md:block" x-data="{ profileOpen: false }">
@@ -234,14 +234,14 @@
                 </div>
             </div>
 
-            <!-- Mobile Org Switcher (Moved here from Nav) -->
+          {{--  <!-- Mobile Org Switcher (Moved here from Nav) -->
             @php
                 $uOrgs = Auth::user()->chefOfOrganisations->merge(Auth::user()->memberOfOrganisations)->unique('id');
                 $activeOrgId = session('active_organisation_id');
                 $currentOrg = $uOrgs->where('id', $activeOrgId)->first() ?: $uOrgs->first();
             @endphp
             @if(Auth::user()->isAdmin())
-                 {{-- No switcher for admin --}}
+                 No switcher for admin 
             @elseif($uOrgs->count() > 0)
             <div class="mb-4 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
                 <p class="text-[10px] font-bold text-indigo-400 uppercase mb-2 ml-1">Organisation Active</p>
@@ -268,8 +268,8 @@
                 </div>
             </div>
             @endif
+--}}
             @endauth
-
             <!-- Search Field (Mobile) -->
             <div class="mb-4 sm:hidden">
                 <div class="relative items-center bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 flex">
