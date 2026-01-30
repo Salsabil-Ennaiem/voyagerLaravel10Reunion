@@ -80,10 +80,9 @@
 
                 <div class="space-y-2">
                     <i class="fas fa-user-tie w-5 text-indigo-500"></i>
-                    <label for="chef_organisation_id" class="text-xs font-bold text-gray-500 uppercase ml-1">Gérant (Chef d'Organisation)</label>
-                    <select name="chef_organisation_id" id="chef_organisation_id" 
+                    <label for="chef_organisation_id" class="text-xs font-bold text-gray-500 uppercase ml-1">Gérant (Chef d'Organisation) <span class="text-red-500">*</span></label>
+                    <select name="chef_organisation_id" id="chef_organisation_id" required
                             class="w-full px-4 py-3 rounded-2xl bg-white/50 border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
-                        <option value="">Choisir un chef...</option>
                         @foreach($users as $u)
                             <option value="{{ $u->id }}" {{ old('chef_organisation_id') == $u->id ? 'selected' : '' }}>
                                 {{ $u->name }} ({{ $u->email }})

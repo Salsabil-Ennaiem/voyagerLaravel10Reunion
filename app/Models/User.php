@@ -28,7 +28,6 @@ class User extends \TCG\Voyager\Models\User
         'actif',
         'image',
         'role_id',
-        // 'role', // Conflict with Voyager relationship
     ];
 
     /**

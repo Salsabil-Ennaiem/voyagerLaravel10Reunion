@@ -47,8 +47,8 @@ class ReunionUpdatedNotification extends Notification
                     ->greeting('Bonjour / Bonsoire !'. $notifiable->name . ',')
                     ->line("Une réunion a été {$actionText}.")
                     ->line('Sujet : ' . $this->reunion->objet)
-                    ->line('Date : ' . $this->reunion->date_debut->format('d/m/Y H:i'))
-                    ->line('Date : ' . $this->reunion->date_fin->format('d/m/Y H:i'))
+                    ->line('Date début : ' . $this->reunion->date_debut->format('d/m/Y H:i'))
+                    ->line('Date fin : ' . $this->reunion->date_fin->format('d/m/Y H:i'))
                     ->line('**Lieu :** ' . ($this->reunion->lieu ?? 'Non spécifié'))
                     ->action('Voir le calendrier', url('/calendrier'))
                     ->action('Accepter l\'invitation', url('/reunion/respond/' . $this->reunion->id . '/accept'))
@@ -77,9 +77,12 @@ class ReunionUpdatedNotification extends Notification
 
     public function toBroadcast($notifiable)
     {
+        $actionText = $this->getActionText();
+        
         return new BroadcastMessage([
             'reunion_id' => $this->reunion->id,
-            'message' => 'Nouvelle invitation de réunion',
+            'message' => "Réunion {$actionText} : " . $this->reunion->objet,
+            'action' => $this->action,
             'statut' => 'en_attente'
         ]);
     }

@@ -15,10 +15,8 @@ return new class extends Migration
             $table->string('email_contact')->nullable();
             $table->string('adresse', 255)->nullable();
             $table->foreignId('chef_organisation_id')
-                  ->nullable()
-                  ->constrained('users')
-                  ->onDelete('set null');
-            $table->boolean('active')->default(true)->nullable();
+                  ->constrained('users')->onDelete('set null');
+            $table->boolean('active')->default(true);
             $table->string('image')->nullable();
             $table->timestamps();
         });

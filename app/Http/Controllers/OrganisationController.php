@@ -4,6 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Organisation;
 use App\Models\User;
+use App\Http\Requests\Organistion\StoreOrganisationRequest;
+use App\Http\Requests\Organistion\UpdateOrganisationRequest;
+use App\Http\Requests\Organistion\AddMemberRequest;
+use App\Http\Requests\Organistion\UpdateMemberRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -11,6 +15,58 @@ use Illuminate\Support\Facades\Storage;
 
 class OrganisationController extends Controller
 {
+    /**
+     * Check if a function is protected (chef-related functions)
+     */
+    private function isProtectedFunction($function)
+    {
+        $protectedFunctions = ['chef', "chef d'organisation", 'gérant', 'gerant'];
+        return in_array(strtolower(trim($function)), $protectedFunctions);
+    }
+
+    /**
+     * Handle image upload and storage
+     */
+    private function handleImageUpload($request, $organisation = null)
+    {
+        if (!$request->hasFile('image')) {
+            return null;
+        }
+
+        // Delete old image if updating
+        if ($organisation && $organisation->image && !str_starts_with($organisation->image, 'http')) {
+            Storage::disk('public')->delete($organisation->image);
+        }
+
+        return $request->file('image')->store('organisations', 'public');
+    }
+
+    /**
+     * Check if a user is a member of an organization
+     */
+    private function isMemberOfOrganisation(Organisation $organisation, User $member)
+    {
+        return $organisation->members()->where('compte_id', $member->id)->exists();
+    }
+
+    /**
+     * Handle chef assignment changes
+     */
+    private function handleChefAssignment(Organisation $organisation, $oldChefId, $newChefId)
+    {
+        // Remove old chef from members if different
+        if ($oldChefId && $oldChefId != $newChefId) {
+            $organisation->members()->detach($oldChefId);
+        }
+        
+        // Add new chef as member with "Chef d'Organisation" function
+        if ($newChefId && $newChefId != $oldChefId) {
+            $organisation->members()->syncWithoutDetaching([
+                $newChefId => ['fonction' => "Chef d'Organisation"]
+            ]);
+        }
+    }
+
     public function __construct()
     {
         // Apply auth middleware to all methods
@@ -45,9 +101,7 @@ class OrganisationController extends Controller
      * Only Admin can access this.
      */
     public function create()
-    {
-        $this->authorize('create', Organisation::class);
-        
+    {   
         $users = User::where('actif', true)->get();
         return view('organisations.create', compact('users'));
     }
@@ -56,29 +110,27 @@ class OrganisationController extends Controller
      * Store a newly created organisation.
      * Only Admin can create organisations.
      */
-    public function store(Request $request)
+    public function store(StoreOrganisationRequest $request)
     {
         $this->authorize('create', Organisation::class);
-
-        $request->validate([
-            'nom' => 'required|string|max:150',
-            'email_contact' => 'nullable|email|max:255',
-            'adresse' => 'nullable|string|max:500',
-            'description' => 'nullable|string',
-            'chef_organisation_id' => 'nullable|exists:users,id',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'active' => 'nullable|boolean',
-        ]);
-
         $data = $request->only(['nom', 'email_contact', 'adresse', 'description', 'chef_organisation_id']);
         $data['active'] = $request->has('active') ? $request->active : true;
 
-        if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('organisations', 'public');
-            $data['image'] = $path;
+        // Handle image upload
+        $imagePath = $this->handleImageUpload($request);
+        if ($imagePath) {
+            $data['image'] = $imagePath;
         }
 
         $organisation = Organisation::create($data);
+
+        // Automatically add the chef as the first member with "Chef d'Organisation" function
+        $chef = User::find($data['chef_organisation_id']);
+        if ($chef) {
+            $organisation->members()->attach($chef->id, [
+                'fonction' => "Chef d'Organisation"
+            ]);
+        }
 
         return redirect()
             ->route('organisations.show', $organisation)
@@ -113,41 +165,26 @@ class OrganisationController extends Controller
      * Admin can update any organisation.
      * Chef can only update their own organisation.
      */
-    public function update(Request $request, Organisation $organisation)
+    public function update(UpdateOrganisationRequest $request, Organisation $organisation)
     {
         $this->authorize('update', $organisation);
 
         $user = Auth::user();
-
-        $rules = [
-            'nom' => 'required|string|max:255',
-            'email_contact' => 'nullable|email|max:255',
-            'adresse' => 'nullable|string|max:500',
-            'description' => 'nullable|string',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-        ];
-
-        // Only Admin can change the chef
-        if ($user->isAdmin()) {
-            $rules['chef_organisation_id'] = 'nullable|exists:users,id';
-        }
-
-        $request->validate($rules);
-
         $data = $request->only(['nom', 'email_contact', 'adresse', 'description']);
 
         // Only Admin can update the chef
         if ($user->isAdmin() && $request->has('chef_organisation_id')) {
-            $data['chef_organisation_id'] = $request->chef_organisation_id;
+            $oldChefId = $organisation->chef_organisation_id;
+            $newChefId = $request->chef_organisation_id;
+            
+            $this->handleChefAssignment($organisation, $oldChefId, $newChefId);
+            $data['chef_organisation_id'] = $newChefId;
         }
 
-        if ($request->hasFile('image')) {
-            // Delete old image if it's a local path
-            if ($organisation->image && !str_starts_with($organisation->image, 'http')) {
-                Storage::disk('public')->delete($organisation->image);
-            }
-            $path = $request->file('image')->store('organisations', 'public');
-            $data['image'] = $path;
+        // Handle image upload
+        $imagePath = $this->handleImageUpload($request, $organisation);
+        if ($imagePath) {
+            $data['image'] = $imagePath;
         }
 
         $organisation->update($data);
@@ -178,6 +215,9 @@ class OrganisationController extends Controller
     public function destroy(Organisation $organisation)
     {
         $this->authorize('delete', $organisation);
+
+        // Delete all members first
+        $organisation->members()->detach();
 
         // Delete the image if exists
         if ($organisation->image && !str_starts_with($organisation->image, 'http')) {
@@ -223,15 +263,9 @@ class OrganisationController extends Controller
      * Add a member to the organisation.
      * Only Admin or Chef can add members.
      */
-    public function addMember(Request $request, Organisation $organisation)
+    public function addMember(AddMemberRequest $request, Organisation $organisation)
     {
         $this->authorize('manageMembers', $organisation);
-
-        $request->validate([
-            'email' => 'required|email',
-            'fonction' => 'nullable|string|max:255',
-        ]);
-
         $user = User::where('email', $request->email)->first();
         $wasCreated = false;
         
@@ -242,7 +276,7 @@ class OrganisationController extends Controller
 
             $user = User::create([
                 'email' => $request->email,
-                'nom' => strtoupper($username),
+                'nom' => ucfirst($username),
                 'prenom' => ucfirst($username),
                 'password' => Hash::make('password'),
                 'actif' => true,
@@ -250,13 +284,24 @@ class OrganisationController extends Controller
             ]);
         }
 
-        $organisation->members()->syncWithoutDetaching([
-            $user->id => ['fonction' => $request->fonction]
+        // Check if user is already a member of this organization
+        if ($this->isMemberOfOrganisation($organisation, $user)) {
+            return back()->with('error', 'Cet utilisateur est déjà membre de cette organisation.');
+        }
+
+        // Block chef functions completely in member management
+        if ($this->isProtectedFunction($request->fonction)) {
+            return back()->with('error', 'Les fonctions de type chef doivent être gérées via la modification de l\'organisation.');
+        }
+
+        // Attach the member to the organization with their function
+        $organisation->members()->attach($user->id, [
+            'fonction' => $request->fonction
         ]);
 
         $msg = $wasCreated 
-            ? "Utilisateur créé et ajouté comme membre." 
-            : "Membre ajouté avec succès.";
+            ? "Utilisateur créé et ajouté comme membre avec succès." 
+            : "Membre ajouté à l'organisation avec succès.";
             
         return back()->with('success', $msg);
     }
@@ -265,14 +310,20 @@ class OrganisationController extends Controller
      * Update a member's fonction in the organisation.
      * Only Admin or Chef can update members.
      */
-    public function updateMember(Request $request, Organisation $organisation, User $member)
+    public function updateMember(UpdateMemberRequest $request, Organisation $organisation, User $member)
     {
         $this->authorize('manageMembers', $organisation);
-
-        $request->validate([
-            'fonction' => 'nullable|string|max:255',
-        ]);
-
+        
+        // Check if member exists
+        if (!$this->isMemberOfOrganisation($organisation, $member)) {
+            return back()->with('error', 'Ce membre ne fait pas partie de cette organisation.');
+        }
+        
+        // Block chef functions completely in member management
+        if ($this->isProtectedFunction($request->fonction)) {
+            return back()->with('error', 'Les fonctions de type chef doivent être gérées via la modification de l\'organisation.');
+        }
+        
         $organisation->members()->updateExistingPivot($member->id, [
             'fonction' => $request->fonction
         ]);
@@ -287,7 +338,19 @@ class OrganisationController extends Controller
     public function removeMember(Organisation $organisation, User $member)
     {
         $this->authorize('manageMembers', $organisation);
-
+        
+        // Check if member exists
+        if (!$this->isMemberOfOrganisation($organisation, $member)) {
+            return back()->with('error', 'Ce membre ne fait pas partie de cette organisation.');
+        }
+        
+        // Prevent removing the chef unless admin is changing the chef
+        $currentMember = $organisation->members()->where('compte_id', $member->id)->first();
+        
+        if ($currentMember && $this->isProtectedFunction($currentMember->pivot->fonction) && !Auth::user()->isAdmin()) {
+            return back()->with('error', 'Seul un administrateur peut retirer un chef de l\'organisation.');
+        }
+        
         $organisation->members()->detach($member->id);
 
         return back()->with('success', 'Membre retiré de l\'organisation.');

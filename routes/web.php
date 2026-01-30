@@ -43,6 +43,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/reunions/list', 'list')->name('reunions.list');
         Route::get('/reunions/export', 'export')->name('reunions.export');
         Route::get('/reunion-options', 'getOptions')->name('reunions.options');
+        Route::get('/organisations/data', 'getOrganisations')->name('organisations.data');
         Route::post('/reunions', 'store')->middleware('throttle:60,1')->name('reunions.store');
         Route::get('/reunions/{reunion}/edit', 'edit')->name('reunions.edit');
         Route::put('/reunions/{reunion}', 'update')->name('reunions.update');
@@ -63,8 +64,8 @@ Route::middleware(['auth'])->group(function () {
         Route::patch('/organisations/{organisation}/toggle-active', 'toggleActive')->name('organisations.toggleActive');
         Route::delete('/organisations/{organisation}', 'destroy')->name('organisations.destroy');
         Route::post('/organisations/{organisation}/members', 'addMember')->name('organisations.members.add');
-        Route::post('/organisations/{organisation}/members/{user}', 'updateMember')->name('organisations.members.update');
-        Route::delete('/organisations/{organisation}/members/{user}', 'removeMember')->name('organisations.members.remove');
+        Route::post('/organisations/{organisation}/members/{member}', 'updateMember')->name('organisations.members.update');
+        Route::delete('/organisations/{organisation}/members/{member}', 'removeMember')->name('organisations.members.remove');
     });
 });
 

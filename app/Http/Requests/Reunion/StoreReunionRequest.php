@@ -38,6 +38,19 @@ class StoreReunionRequest extends FormRequest
     }
 
     /**
+     * Get custom error messages for validation rules.
+     */
+    public function messages(): array
+    {
+        return [
+            'participants.*.email' => 'Chaque participant doit avoir une adresse email valide.',
+            'participants.required' => 'Au moins un participant est requis.',
+            'organisation_id.required' => 'L\'organisation est requise.',
+            'organisation_id.exists' => 'L\'organisation sélectionnée n\'existe pas.',
+        ];
+    }
+
+    /**
      * Prepare data for validation.
      */
     protected function prepareForValidation()

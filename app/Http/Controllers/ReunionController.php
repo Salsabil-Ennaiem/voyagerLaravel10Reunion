@@ -6,15 +6,15 @@ use App\Models\Reunion;
 use App\Models\Organisation; 
 use App\Models\User;
 use App\Models\Invitation;
-use App\Http\Requests\StoreReunionRequest;
-use App\Http\Requests\UpdateReunionRequest;
+use App\Http\Requests\Reunion\StoreReunionRequest;
+use App\Http\Requests\Reunion\UpdateReunionRequest;
 use App\Notifications\ReunionUpdatedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache; 
-
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\HolidayService;
 use Illuminate\Support\Str;
 
 class ReunionController extends Controller
@@ -39,50 +39,7 @@ class ReunionController extends Controller
         $format = $request->input('format', 'pdf');
 
         $query = Reunion::with('organisation', 'invitations');
-
-        $user = auth()->user();
-        if ($user) {
-            if ($user->isAdmin()) {
-                if ($orgId) { 
-                    $query->where('organisation_id', $orgId); 
-                }
-            } else {
-                
-                $activeOrgId = $orgId ?: $user->getActiveOrganisationId();
-                if ($activeOrgId) {
-                    $query->where('organisation_id', $activeOrgId);
-                    
-                    if (!$user->isChefIn($activeOrgId)) {
-                        $query->whereHas('invitations', function($q) use ($user) {
-                            $q->where('email', $user->email);
-                        });
-                    }
-                } else {
-                    // If no active org selected, show all reunions from all their orgs
-                    $chefOrgIds = $user->chefOfOrganisations()->pluck('id')->toArray();
-                    $memberOrgIds = $user->memberOfOrganisations()->pluck('organisation_id')->toArray();
-                    
-                    $query->where(function($q) use ($user, $chefOrgIds, $memberOrgIds) {
-                        if (!empty($chefOrgIds)) {
-                            $q->orWhereIn('organisation_id', $chefOrgIds);
-                        }
-                        if (!empty($memberOrgIds)) {
-                            $q->orWhere(function($sub) use ($user, $memberOrgIds) {
-                                $sub->whereIn('organisation_id', $memberOrgIds)
-                                    ->whereHas('invitations', function($inv) use ($user) {
-                                        $inv->where('email', $user->email);
-                                    });
-                            });
-                        }
-                        
-                        // If they have no orgs at all, they see nothing
-                        if (empty($chefOrgIds) && empty($memberOrgIds)) {
-                            $q->whereRaw('1 = 0');
-                        }
-                    });
-                }
-            }
-        }
+        $query = $this->applyUserOrganizationFilter($query, auth()->user(), $orgId);
 
         $reunions = $query->orderBy('date_debut', 'desc')->get();
 
@@ -194,65 +151,40 @@ class ReunionController extends Controller
         $end = Carbon::parse($request->end);
 
         $reunionsQuery = Reunion::whereBetween('date_debut', [$start, $end]);
-
-        $user = auth()->user();
-        if ($user) {
-            $activeOrgId = $user->getActiveOrganisationId();
-
-            if ($user->isAdmin()) {
-                // Admin sees all by default. Only filter if organisation_id is provided in the request.
-                if ($request->filled('organisation_id')) {
-                    $reunionsQuery->where('organisation_id', $request->organisation_id);
-                }
-            } else {
-                // Non-admin logic: MUST have an active organisation or they see nothing.
-                if (!$activeOrgId) {
-                    $firstOrg = $user->chefOfOrganisations()->first() ?? $user->memberOfOrganisations()->first();
-                    if ($firstOrg) {
-                        $activeOrgId = $firstOrg->id;
-                        session(['active_organisation_id' => $activeOrgId]); 
-                    }
-                }
-
-                if ($activeOrgId) {
-                    $reunionsQuery->where('organisation_id', $activeOrgId);
-                    
-                    // If not chef in this specific org, filter by invitation
-                    if (!$user->isChefIn($activeOrgId)) {
-                        $reunionsQuery->whereHas('invitations', function($q) use ($user) {
-                            $q->where('email', $user->email);
-                        });
-                    }
-                } else {
-                    $reunionsQuery->whereRaw('1 = 0');
-                }
-            }
-        }
+        $reunionsQuery = $this->applyUserOrganizationFilter($reunionsQuery, auth()->user(), $request->input('organisation_id'));
 
         $reunions = $reunionsQuery->with('invitations')->get()
-            ->map(function ($reunion) use ($user) {
+            ->map(function ($reunion) {
+                $user = auth()->user();
                 return [
                     'id' => $reunion->id,
                     'title' => $reunion->objet,
                     'start' => $reunion->date_debut->toDateTimeString(),
                     'end' => $reunion->date_fin->toDateTimeString(),
-                    'status' => $reunion->statut, // for color coding
+                    'status' => $reunion->statut,
                     'type' => $reunion->type,
                     'description' => $reunion->description,
                     'ordre_du_jour' => $reunion->ordre_du_jour,
                     'lieu' => $reunion->lieu,
-                    'organisation_id' => $reunion->organisation_id, // Useful for frontend info
+                    'organisation_id' => $reunion->organisation_id,
                     'participants' => $reunion->invitations->pluck('email')->toArray(),
                     'can_edit' => $user->can('update', $reunion),
                     'can_delete' => $user->can('delete', $reunion),
                 ];
             });
 
-        return response()->json($reunions);
+        // Include holidays for the current year
+        $holidays = HolidayService::getHolidaysForYear($start->year);
+
+        return response()->json([
+            'events' => $reunions,
+            'holidays' => $holidays
+        ]);
     }
 
     public function getOptions()
     {
+        $user = auth()->user();
         $options = [
             'types' => [
                 ['id' => 'presentiel', 'label' => 'Présentiel'],
@@ -265,20 +197,81 @@ class ReunionController extends Controller
                 ['id' => 'en_cours', 'label' => 'En Cours'],
                 ['id' => 'terminee', 'label' => 'Terminée'],
                 ['id' => 'annulee', 'label' => 'Annulée']
+            ],
+            'user_info' => [
+                'is_admin' => $user ? $user->isAdmin() : false,
+                'is_chef' => $user ? $user->isChef() : false,
+                'can_create' => $user ? $user->can('create', Reunion::class) : false,
+                'min_date' => $this->getMinDateForUser($user),
+                'default_type' => 'presentiel',
+                'default_status' => 'planifiee'
             ]
         ];
 
         // If admin, send organisations list
-        $user = auth()->user();
         if ($user && $user->isAdmin()) {
-            $options['organisations'] = Organisation::select('id', 'nom', 'code')->orderBy('nom')->get();
+            $options['organisations'] = $this->getUserOrganisations($user);
+        } elseif ($user) {
+            // Non-admin users get only organizations they can create reunions for
+            $options['organisations'] = $this->getUserOrganisations($user);
         }
 
         return response()->json($options);
     }
 
+    /**
+     * Get organizations accessible to the current user for creating reunions
+     */
+    private function getUserOrganisations($user)
+    {
+        if (!$user) {
+            return collect();
+        }
+
+        if ($user->isAdmin()) {
+            return Organisation::select('id', 'nom', 'code')->orderBy('nom')->get();
+        }
+
+        // Non-admin users get only organizations they can create reunions for
+        $organisations = collect();
+        
+        // Get organizations where user is chef
+        $chefOrgs = $user->chefOfOrganisations()->select('id', 'nom', 'code')->get();
+        
+        // Check each organization if user can create reunions there
+        foreach ($chefOrgs as $org) {
+            if ($user->can('createForOrganisation', [Reunion::class, $org->id])) {
+                $organisations->push($org);
+            }
+        }
+        
+        return $organisations;
+    }
+
+    private function getMinDateForUser($user): ?string
+    {
+        if (!$user) return null;
+        
+        // Chefs cannot create meetings in the past
+        if ($user->isChef() && !$user->isAdmin()) {
+            return now()->format('Y-m-d\TH:i');
+        }
+        
+        return null; // Admins can create any date
+    }
+
+    public function getOrganisations()
+    {
+        $user = auth()->user();
+        $organisations = $this->getUserOrganisations($user);
+        return response()->json($organisations);
+    }
+
     public function store(StoreReunionRequest $request)
     {
+        // Additional authorization check using policy
+        $this->authorize('create', Reunion::class);
+        
         // Validation and Authorization handled by Request and Policy
         
         try {
@@ -293,16 +286,7 @@ class ReunionController extends Controller
             $reunion = Reunion::create($data);
 
             // Gestion des participants
-            foreach ($participants as $email) {
-                $participant = User::where('email', $email)->first();
-                
-                Invitation::create([
-                    'reunion_id' => $reunion->id,
-                    'participant_id' => $participant ? $participant->id : null,
-                    'email' => $email,
-                    'statut' => 'en_attente',
-                ]);
-            }
+            $this->createParticipantInvitations($reunion, $participants);
             
             $this->notifyParticipants($reunion, 'created');
             
@@ -323,18 +307,26 @@ class ReunionController extends Controller
 
     public function getNotifications()
     {
-        $user = auth()->user();
-        if (!$user) return response()->json([]);
+        try {
+            $user = auth()->user();
+            if (!$user) return response()->json([]);
 
-        $notifications = $user->unreadNotifications->map(function($n) {
-            return [
-                'id' => $n->id,
-                'data' => $n->data,
-                'created_at' => $n->created_at->diffForHumans(),
-            ];
-        });
+            $notifications = $user->unreadNotifications->map(function($n) {
+                return [
+                    'id' => $n->id,
+                    'data' => $n->data,
+                    'created_at' => $n->created_at->diffForHumans(),
+                ];
+            });
 
-        return response()->json($notifications);
+            return response()->json($notifications);
+        } catch (\Exception $e) {
+            Log::error('Error fetching notifications: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to fetch notifications',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function markNotificationAsRead($id)
@@ -380,24 +372,17 @@ class ReunionController extends Controller
             $reunion->invitations()->delete();
             
             // Add new ones
-            foreach ($participants as $email) {
-                $participant = User::where('email', $email)->first();
-                Invitation::create([
-                    'reunion_id' => $reunion->id,
-                    'participant_id' => $participant ? $participant->id : null,
-                    'email' => $email,
-                    'statut' => 'en_attente',
-                ]);
-            }
-
-            $reunion->refresh();
+            $this->createParticipantInvitations($reunion, $participants);
+            
             $this->notifyParticipants($reunion, 'updated');
-
+            
             return response()->json(['success' => true, 'message' => 'Réunion mise à jour', 'data' => $reunion]);
         } catch (\Exception $e) {
+            Log::error('Erreur mise à jour réunion: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
             return response()->json([
-                'success' => false,
-                'message' => 'Erreur: ' . $e->getMessage()
+                'success' => false, 
+                'message' => 'Erreur serveur: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -429,6 +414,74 @@ class ReunionController extends Controller
     /**
      * Helper to notify all participants of a reunion about updates/deletions
      */
+    /**
+     * Create participant invitations for a reunion
+     */
+    private function createParticipantInvitations(Reunion $reunion, array $participants)
+    {
+        foreach ($participants as $email) {
+            $participant = User::where('email', $email)->first();
+            
+            Invitation::create([
+                'reunion_id' => $reunion->id,
+                'participant_id' => $participant ? $participant->id : null,
+                'email' => $email,
+                'statut' => 'en_attente',
+            ]);
+        }
+    }
+
+    /**
+     * Apply user-specific organization filtering to reunion queries
+     */
+    private function applyUserOrganizationFilter($query, $user, $orgId = null)
+    {
+        if (!$user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->isAdmin()) {
+            // Admin sees all reunions in the database
+            // Only filter if organisation_id is explicitly provided
+            if ($orgId) { 
+                $query->where('organisation_id', $orgId); 
+            }
+        } else {
+            // Non-admin users: get all their organizations and filter accordingly
+            $chefOrgIds = $user->chefOfOrganisations()->pluck('id')->toArray();
+            $memberOrgIds = $user->memberOfOrganisations()->pluck('organisation_id')->toArray();
+            
+            if (empty($chefOrgIds) && empty($memberOrgIds)) {
+                // User has no organizations, show nothing
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(function($query) use ($user, $chefOrgIds, $memberOrgIds) {
+                    // If user is chef of organizations, show all reunions from those orgs
+                    if (!empty($chefOrgIds)) {
+                        $query->orWhereIn('organisation_id', $chefOrgIds);
+                    }
+                    
+                    // If user is member of organizations, show only reunions they're invited to
+                    if (!empty($memberOrgIds)) {
+                        $query->orWhere(function($subQuery) use ($user, $memberOrgIds) {
+                            $subQuery->whereIn('organisation_id', $memberOrgIds)
+                                     ->whereHas('invitations', function($invitationQuery) use ($user) {
+                                         $invitationQuery->where('email', $user->email);
+                                     });
+                        });
+                    }
+                });
+                
+                // If specific org is requested, ensure user has access to it
+                if ($orgId) {
+                    $query->where('organisation_id', $orgId);
+                }
+            }
+        }
+
+        return $query;
+    }
+
     protected function notifyParticipants(Reunion $reunion, string $action)
     {
         try {

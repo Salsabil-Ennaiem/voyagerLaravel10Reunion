@@ -63,19 +63,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <!-- Sidebar Stats/Info -->
             <div class="lg:col-span-1 space-y-6">
-                <!--
-                <div class="glass rounded-3xl p-6 shadow-sm border-white/40">
-                    <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Informations</h3>
-                    <div class="space-y-4">
-                        <div class="flex items-center gap-3 text-gray-700">
-                            <div class="text-sm">
-                                <p class="font-bold">{{ $organisation->chef->name ?? 'Aucun chef' }}</p>
-                                <p class="text-xs text-gray-500">Gérant</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
- -->
+               <!-- u can add here like the next part -->
                 <div class="glass rounded-3xl p-6 shadow-sm border-white/40">
                     <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Activités</h3>
                     <div class="flex items-center justify-between py-2 border-b border-gray-100">
@@ -163,15 +151,19 @@
                         <div class="space-y-2">
                             <i class="fas fa-user-tie w-5 text-indigo-500"></i>
                             <label for="chef_organisation_id" class="text-xs font-bold text-gray-500 uppercase ml-1">Gérant (Chef d'Organisation)</label>
-                            <select name="chef_organisation_id" id="chef_organisation_id" 
-                                    class="w-full px-4 py-3 rounded-2xl bg-white/50 border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
-                                <option value="">Choisir un chef...</option>
-                                @foreach($allUsers as $u)
-                                    <option value="{{ $u->id }}" {{ $organisation->chef_organisation_id == $u->id ? 'selected' : '' }}>
-                                        {{ $u->name }} ({{ $u->email }})
-                                    </option>
-                                @endforeach
-                            </select>
+                            <div class="relative">
+                                <input type="text" class="absolute z-10 top-0 left-0 opacity-0 w-full"/>
+                                <select name="chef_organisation_id" id="chef_organisation_id" 
+                                        class="w-full px-4 py-3 rounded-2xl bg-white/50 border border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none font-medium text-gray-700">
+                                    @foreach($allUsers as $u)
+                                        @if (Str::contains(strtolower($u->name), strtolower($organisation->chef_organisation_id ?? '')))
+                                            <option value="{{ $u->id }}" {{ $organisation->chef_organisation_id == $u->id ? 'selected' : '' }}>
+                                                {{ $u->name }} ({{ $u->email }})
+                                            </option>
+                                        @endif
+                                    @endforeach
+                                </select>
+                            </div>
                             <p class="text-[10px] text-gray-400 ml-1">Seul un administrateur peut changer le chef d'une organisation.</p>
                         </div>
                         @endif
@@ -244,6 +236,10 @@
                                 </div>
                             </div>
                             @if($canManageMembers)
+                             @php
+                                    $isChef = in_array(strtolower(trim($member->pivot->fonction ?? '')), ['chef', "chef d'organisation", 'gérant', 'gerant']);
+                                @endphp
+                            @if(!$isChef)
                             <div class="flex items-center gap-2">
                                 <button onclick="openEditMember('{{ $member->id }}', '{{ $member->pivot->fonction }}')" class="p-2 text-indigo-400 hover:text-indigo-600 transition">
                                     <i class="fas fa-edit"></i>
@@ -256,6 +252,7 @@
                                     </button>
                                 </form>
                             </div>
+                            @endif
                             @endif
                         </div>
                         @empty
@@ -289,7 +286,8 @@
                     </div>
                     <div class="space-y-2">
                         <label class="text-xs font-bold text-gray-500 uppercase ml-1">Fonction</label>
-                        <input type="text" name="fonction" placeholder="Ex: Développeur, Expert..." class="w-full px-4 py-3 rounded-2xl bg-white border border-gray-200 focus:border-indigo-500 outline-none font-medium">
+                        <input type="text" name="fonction" placeholder="Ex: Développeur, Designer, Manager..." class="w-full px-4 py-3 rounded-2xl bg-white border border-gray-200 focus:border-indigo-500 outline-none font-medium">
+                        <p class="text-xs text-gray-400 mt-1">Les fonctions de type 'chef' sont gérées via la modification de l'organisation.</p>
                     </div>
                     <button type="submit" class="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg hover:bg-indigo-700 transition transform active:scale-95 mt-4">
                         Ajouter à l'organisation
@@ -315,6 +313,7 @@
                     <div class="space-y-2">
                         <label class="text-xs font-bold text-gray-500 uppercase ml-1">Nouvelle Fonction</label>
                         <input type="text" name="fonction" id="edit_fonction" class="w-full px-4 py-3 rounded-2xl bg-white border border-gray-200 focus:border-indigo-500 outline-none font-medium">
+                        <p class="text-xs text-gray-400 mt-1">Les fonctions de type 'chef' sont gérées via la modification de l'organisation.</p>
                     </div>
                     <button type="submit" class="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg hover:bg-indigo-700 transition transform active:scale-95 mt-4">
                         Enregistrer

@@ -81,34 +81,53 @@
     </div>
 </div>
 
+<script src="{{ asset('js/calendar/reunion-form.js') }}"></script>
 <script>
-    // Handle form submission
-    document.getElementById('reunionForm')?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        reunionFormInstance.submit();
-    });
+    // Wait for the reunion form to be initialized before setting up event listeners
+    document.addEventListener('DOMContentLoaded', () => {
+        // Wait a bit for the reunion form to initialize
+        setTimeout(() => {
+            // Handle form submission
+            document.getElementById('reunionForm')?.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (window.reunionFormInstance) {
+                    reunionFormInstance.submit();
+                } else {
+                    console.error('reunionFormInstance not found');
+                }
+            });
 
-    // Handle date validation
-    document.getElementById('date_debut')?.addEventListener('change', () => {
-        reunionFormInstance.validateDates();
-    });
+            // Handle date validation
+            document.getElementById('date_debut')?.addEventListener('change', () => {
+                if (window.reunionFormInstance) {
+                    reunionFormInstance.validateDates();
+                }
+            });
 
-    document.getElementById('date_fin')?.addEventListener('change', () => {
-        reunionFormInstance.validateDates();
-    });
+            document.getElementById('date_fin')?.addEventListener('change', () => {
+                if (window.reunionFormInstance) {
+                    reunionFormInstance.validateDates();
+                }
+            });
 
-    // Handle enter key in email input
-    document.getElementById('newParticipantEmail')?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            reunionFormInstance.addParticipant();
-        }
-    });
+            // Handle enter key in email input
+            document.getElementById('newParticipantEmail')?.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (window.reunionFormInstance) {
+                        reunionFormInstance.addParticipant();
+                    }
+                }
+            });
 
-    // Close modal when clicking outside
-    document.getElementById('reunionFormModal')?.addEventListener('click', (e) => {
-        if (e.target.id === 'reunionFormModal') {
-            reunionFormInstance.close();
-        }
+            // Close modal when clicking outside
+            document.getElementById('reunionFormModal')?.addEventListener('click', (e) => {
+                if (e.target.id === 'reunionFormModal') {
+                    if (window.reunionFormInstance) {
+                        reunionFormInstance.close();
+                    }
+                }
+            });
+        }, 100);
     });
 </script>

@@ -13,7 +13,13 @@ class UpdateReunionRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true; 
+        $reunion = $this->route('reunion');
+        
+        if (!$reunion) {
+            return false;
+        }
+        
+        return $this->user()->can('update', $reunion);
     }
 
     /**
@@ -33,6 +39,17 @@ class UpdateReunionRequest extends FormRequest
             'type' => 'required|in:presentiel,visio,hybride',
             'participants' => 'nullable|array',
             'participants.*' => 'email',
+        ];
+    }
+
+    /**
+     * Get custom error messages for validation rules.
+     */
+    public function messages(): array
+    {
+        return [
+            'participants.*.email' => 'Chaque participant doit avoir une adresse email valide.',
+            'participants.required' => 'Au moins un participant est requis.',
         ];
     }
 
