@@ -175,10 +175,13 @@ class ReunionController extends Controller
 
         // Include holidays for the current year
         $holidays = HolidayService::getHolidaysForYear($start->year);
+        
+        $user = auth()->user();
 
         return response()->json([
             'events' => $reunions,
-            'holidays' => $holidays
+            'holidays' => $holidays,
+            'organisations' => $user ? $this->getUserOrganisations($user) : []
         ]);
     }
 

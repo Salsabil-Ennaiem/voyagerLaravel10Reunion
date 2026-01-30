@@ -36,8 +36,9 @@ class CalendarApp {
         this.populateMonthSelect();
         this.populateOrgSelect();
         this.setupEventListeners();
-        this.fetchOrganisations();
+        this.fetchOptions(); // This contains user permissions
         this.fetchEvents();
+        this.fetchOrganisations();
 
         // Support URL param ?date=...
         const params = new URLSearchParams(location.search);
@@ -72,12 +73,6 @@ class CalendarApp {
             timeSlotsContainer: document.getElementById('timeSlotsContainer'),
             closeModalBtn: document.getElementById('closeModalBtn'),
         };
-        
-        console.log('Elements cached:', {
-            adminFilters: this.els.adminFilters,
-            orgSelect: this.els.orgSelect,
-            isAdmin: this.isAdmin
-        });
     }
 
     setupEventListeners() {
@@ -149,7 +144,8 @@ class CalendarApp {
                 this.minDate = data.user_info.min_date || '';
             }
 
-            this.updateFormOptions();
+            // Update admin filter display after user permissions are loaded
+            this.updateAdminFilterDisplay();
         } catch (e) {
             console.error('Error fetching options:', e);
         }
@@ -162,12 +158,19 @@ class CalendarApp {
 
             const res = await fetch(url);
             const data = await res.json();
+            
             this.events = data.events || [];
             this.holidays = data.holidays || {};
             this.allFeries = this.holidays;
             this.renderCalendar();
 
-            // Update admin filter display after user info and organizations are loaded
+            // Update organization select if organizations data is available
+            if (data.organisations) {
+                this.organisations = data.organisations;
+                this.populateOrgSelect();
+            }
+
+            // Update admin filter display after organizations are loaded
             this.updateAdminFilterDisplay();
 
             if (this.targetDateToOpen) {
@@ -191,6 +194,9 @@ class CalendarApp {
     populateOrgSelect() {
         if (!this.els.orgSelect) return;
 
+        // Store current selection before repopulating
+        const currentSelection = this.selectedOrg;
+
         this.els.orgSelect.innerHTML = '';
 
         // Always add "All" first
@@ -203,8 +209,9 @@ class CalendarApp {
             });
         }
 
-        // Reset selectedOrg to show all by default
-        this.selectedOrg = '';
+        // Restore the previous selection
+        this.els.orgSelect.value = currentSelection;
+        this.selectedOrg = currentSelection;
     }
 
     populateYearRange() {
@@ -459,16 +466,7 @@ class CalendarApp {
     updateAdminFilterDisplay() {
         if (this.els.adminFilters) {
             // Admin always sees the filter to optionally filter by organization
-            const shouldShow = this.isAdmin;
-            this.els.adminFilters.style.display = shouldShow ? 'flex' : 'none';
-            console.log('Admin filter display:', {
-                isAdmin: this.isAdmin,
-                element: this.els.adminFilters,
-                willShow: shouldShow,
-                currentDisplay: this.els.adminFilters.style.display
-            });
-        } else {
-            console.log('Admin filter element not found!');
+            this.els.adminFilters.style.display = this.isAdmin ? 'flex' : 'none';
         }
     }
     createOption(value, text, selected = false) {
